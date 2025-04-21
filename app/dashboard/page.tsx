@@ -220,6 +220,49 @@ export default function DashboardPage() {
     setIssueCards((prev) => [newIssue, ...prev])
   }
 
+  const handleIssueDelete = (issueId: string) => {
+    // Remove the issue from the issues list
+    const updatedIssues = issueCards.filter((issue) => issue.id !== issueId)
+    setIssueCards(updatedIssues)
+
+    // Remove the issue from selected issues if it was selected
+    if (selectedIssues.includes(issueId)) {
+      setSelectedIssues((prev) => prev.filter((id) => id !== issueId))
+    }
+
+    toast({
+      title: "问题记录已删除",
+      description: `问题记录 #${issueId} 已成功删除`,
+    })
+  }
+
+  // Add document deletion handler
+  const handleDocumentDelete = (documentId: string) => {
+    // Remove the document from the documents list
+    const updatedDocuments = documents.filter((doc) => doc.id !== documentId)
+    setDocuments(updatedDocuments)
+
+    // Remove document reference from issue cards
+    const updatedIssues = issueCards.map((issue) => {
+      if (issue.generatedDocumentIds?.includes(documentId)) {
+        return {
+          ...issue,
+          generatedDocumentIds: issue.generatedDocumentIds.filter((id) => id !== documentId),
+        }
+      }
+      return issue
+    })
+    setIssueCards(updatedIssues)
+
+    // Find the document to show in the toast message
+    const deletedDocument = documents.find((doc) => doc.id === documentId)
+
+    toast({
+      title: "文档已删除",
+      description: `${deletedDocument?.documentType || "文档"} ${deletedDocument?.documentIdentifier || ""} 已成功删除`,
+    })
+  }
+
   if (!isAuthenticated) {
     return null
   }
@@ -319,6 +362,7 @@ export default function DashboardPage() {
             <GroupedIssueList
               issues={filteredIssues}
               onIssueUpdate={handleIssueUpdate}
+              onIssueDelete={handleIssueDelete}
               selectedIssues={selectedIssues}
               onIssueSelect={handleIssueSelect}
               documents={documents}
@@ -327,6 +371,7 @@ export default function DashboardPage() {
             <IssueCardList
               issues={filteredIssues}
               onIssueUpdate={handleIssueUpdate}
+              onIssueDelete={handleIssueDelete}
               selectedIssues={selectedIssues}
               onIssueSelect={handleIssueSelect}
               documents={documents}
@@ -335,7 +380,7 @@ export default function DashboardPage() {
         </TabsContent>
 
         <TabsContent value="documents">
-          <DocumentList documents={documents} issues={issueCards} />
+          <DocumentList documents={documents} issues={issueCards} onDocumentDelete={handleDocumentDelete} />
         </TabsContent>
       </Tabs>
     </div>

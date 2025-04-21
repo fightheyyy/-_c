@@ -8,18 +8,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Download, Search, FileText, FileWarning, ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
+import { Download, Search, FileText, FileWarning, ChevronDown, ChevronUp, ExternalLink, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 
 interface DocumentListProps {
   documents: GeneratedDocument[]
   issues: IssueCard[]
+  onDocumentDelete?: (documentId: string) => void
 }
 
-export function DocumentList({ documents, issues }: DocumentListProps) {
+export function DocumentList({ documents, issues, onDocumentDelete }: DocumentListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [documentToDelete, setDocumentToDelete] = useState<GeneratedDocument | null>(null)
 
   const toggleRowExpand = (documentId: string) => {
     const newExpandedRows = new Set(expandedRows)
@@ -52,6 +56,24 @@ export function DocumentList({ documents, issues }: DocumentListProps) {
 
   const getIssuesByIds = (ids: string[]) => {
     return issues.filter((issue) => ids.includes(issue.id))
+  }
+
+  const handleDeleteClick = (document: GeneratedDocument) => {
+    setDocumentToDelete(document)
+    setDeleteConfirmOpen(true)
+  }
+
+  const handleDeleteConfirm = () => {
+    if (documentToDelete && onDocumentDelete) {
+      onDocumentDelete(documentToDelete.id)
+      setDeleteConfirmOpen(false)
+      setDocumentToDelete(null)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false)
+    setDocumentToDelete(null)
   }
 
   if (documents.length === 0) {
@@ -138,10 +160,21 @@ export function DocumentList({ documents, issues }: DocumentListProps) {
                     </TableCell>
                     <TableCell>{document.generatedByName}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="sm" className="h-8 gap-1">
-                        <Download className="h-3 w-3" />
-                        下载
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" className="h-8 gap-1">
+                          <Download className="h-3 w-3" />
+                          下载
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1 text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteClick(document)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          删除
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                   {expandedRows.has(document.id) && (
@@ -179,6 +212,14 @@ export function DocumentList({ documents, issues }: DocumentListProps) {
           </TableBody>
         </Table>
       </div>
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="确认删除文档"
+        description={`您确定要删除${documentToDelete?.documentType || ""}${documentToDelete?.documentIdentifier || ""}吗？此操作无法撤销。`}
+      />
     </div>
   )
 }

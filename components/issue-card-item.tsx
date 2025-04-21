@@ -9,18 +9,37 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Edit, MapPin, Building, Calendar, User, FileText, ChevronDown, ChevronUp, ImageIcon } from "lucide-react"
+import {
+  Edit,
+  MapPin,
+  Building,
+  Calendar,
+  User,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  ImageIcon,
+  Trash2,
+} from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 interface IssueCardItemProps {
   issue: IssueCard
   onEditClick: (issue: IssueCard) => void
+  onDeleteClick: (issue: IssueCard) => void
   isSelected: boolean
   onSelect: (selected: boolean) => void
   relatedDocuments: GeneratedDocument[]
 }
 
-export function IssueCardItem({ issue, onEditClick, isSelected, onSelect, relatedDocuments }: IssueCardItemProps) {
+export function IssueCardItem({
+  issue,
+  onEditClick,
+  onDeleteClick,
+  isSelected,
+  onSelect,
+  relatedDocuments,
+}: IssueCardItemProps) {
   const [showDetails, setShowDetails] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
@@ -66,10 +85,16 @@ export function IssueCardItem({ issue, onEditClick, isSelected, onSelect, relate
           <Badge className={`${getStatusColor(issue.status)}`}>{issue.status}</Badge>
           {issue.isMergedCard && <Badge variant="outline">合并卡片</Badge>}
         </div>
-        <Button variant="ghost" size="icon" onClick={() => onEditClick(issue)} disabled={issue.status === "已合并"}>
-          <Edit className="h-4 w-4" />
-          <span className="sr-only">编辑</span>
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={() => onDeleteClick(issue)}>
+            <Trash2 className="h-4 w-4 text-destructive" />
+            <span className="sr-only">删除</span>
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => onEditClick(issue)} disabled={issue.status === "已合并"}>
+            <Edit className="h-4 w-4" />
+            <span className="sr-only">编辑</span>
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="p-4">

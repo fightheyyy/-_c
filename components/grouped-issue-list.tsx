@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { IssueCard, GeneratedDocument } from "@/lib/types"
 import { IssueCardItem } from "@/components/issue-card-item"
 import { EditIssueDialog } from "@/components/edit-issue-dialog"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 interface GroupedIssueListProps {
   issues: IssueCard[]
   onIssueUpdate: (updatedIssue: IssueCard) => void
+  onIssueDelete: (issueId: string) => void // Add this line
   selectedIssues: string[]
   onIssueSelect: (issueId: string, selected: boolean) => void
   documents: GeneratedDocument[]
@@ -21,12 +23,15 @@ interface GroupedIssueListProps {
 export function GroupedIssueList({
   issues,
   onIssueUpdate,
+  onIssueDelete, // Add this parameter
   selectedIssues,
   onIssueSelect,
   documents,
 }: GroupedIssueListProps) {
   const [editingIssue, setEditingIssue] = useState<IssueCard | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false) // Add this line
+  const [issueToDelete, setIssueToDelete] = useState<IssueCard | null>(null) // Add this line
 
   const handleEditClick = (issue: IssueCard) => {
     setEditingIssue(issue)
@@ -39,6 +44,25 @@ export function GroupedIssueList({
   const handleEditSave = (updatedIssue: IssueCard) => {
     onIssueUpdate(updatedIssue)
     setEditingIssue(null)
+  }
+
+  // Add these new handlers
+  const handleDeleteClick = (issue: IssueCard) => {
+    setIssueToDelete(issue)
+    setDeleteConfirmOpen(true)
+  }
+
+  const handleDeleteConfirm = () => {
+    if (issueToDelete) {
+      onIssueDelete(issueToDelete.id)
+      setDeleteConfirmOpen(false)
+      setIssueToDelete(null)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false)
+    setIssueToDelete(null)
   }
 
   const toggleGroup = (responsibleParty: string) => {
@@ -143,6 +167,7 @@ export function GroupedIssueList({
                       key={issue.id}
                       issue={issue}
                       onEditClick={handleEditClick}
+                      onDeleteClick={handleDeleteClick} // Add this line
                       isSelected={selectedIssues.includes(issue.id)}
                       onSelect={(selected) => onIssueSelect(issue.id, selected)}
                       relatedDocuments={documents.filter((doc) => doc.sourceCardIds.includes(issue.id))}
@@ -155,6 +180,14 @@ export function GroupedIssueList({
       ))}
 
       {editingIssue && <EditIssueDialog issue={editingIssue} onClose={handleEditClose} onSave={handleEditSave} />}
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="确认删除问题记录"
+        description={`您确定要删除问题记录 #${issueToDelete?.id || ""} 吗？此操作无法撤销。`}
+      />
     </div>
   )
 }

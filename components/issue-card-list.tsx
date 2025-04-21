@@ -4,17 +4,28 @@ import { useState } from "react"
 import type { IssueCard, GeneratedDocument } from "@/lib/types"
 import { IssueCardItem } from "@/components/issue-card-item"
 import { EditIssueDialog } from "@/components/edit-issue-dialog"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 
 interface IssueCardListProps {
   issues: IssueCard[]
   onIssueUpdate: (updatedIssue: IssueCard) => void
+  onIssueDelete: (issueId: string) => void // Add this line
   selectedIssues: string[]
   onIssueSelect: (issueId: string, selected: boolean) => void
   documents: GeneratedDocument[]
 }
 
-export function IssueCardList({ issues, onIssueUpdate, selectedIssues, onIssueSelect, documents }: IssueCardListProps) {
+export function IssueCardList({
+  issues,
+  onIssueUpdate,
+  onIssueDelete,
+  selectedIssues,
+  onIssueSelect,
+  documents,
+}: IssueCardListProps) {
   const [editingIssue, setEditingIssue] = useState<IssueCard | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false) // Add this line
+  const [issueToDelete, setIssueToDelete] = useState<IssueCard | null>(null) // Add this line
 
   const handleEditClick = (issue: IssueCard) => {
     setEditingIssue(issue)
@@ -27,6 +38,25 @@ export function IssueCardList({ issues, onIssueUpdate, selectedIssues, onIssueSe
   const handleEditSave = (updatedIssue: IssueCard) => {
     onIssueUpdate(updatedIssue)
     setEditingIssue(null)
+  }
+
+  // Add these new handlers
+  const handleDeleteClick = (issue: IssueCard) => {
+    setIssueToDelete(issue)
+    setDeleteConfirmOpen(true)
+  }
+
+  const handleDeleteConfirm = () => {
+    if (issueToDelete) {
+      onIssueDelete(issueToDelete.id)
+      setDeleteConfirmOpen(false)
+      setIssueToDelete(null)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false)
+    setIssueToDelete(null)
   }
 
   if (issues.length === 0) {
@@ -46,6 +76,7 @@ export function IssueCardList({ issues, onIssueUpdate, selectedIssues, onIssueSe
             key={issue.id}
             issue={issue}
             onEditClick={handleEditClick}
+            onDeleteClick={handleDeleteClick} // Add this line
             isSelected={selectedIssues.includes(issue.id)}
             onSelect={(selected) => onIssueSelect(issue.id, selected)}
             relatedDocuments={documents.filter((doc) => doc.sourceCardIds.includes(issue.id))}
@@ -54,6 +85,14 @@ export function IssueCardList({ issues, onIssueUpdate, selectedIssues, onIssueSe
       </div>
 
       {editingIssue && <EditIssueDialog issue={editingIssue} onClose={handleEditClose} onSave={handleEditSave} />}
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="确认删除问题记录"
+        description={`您确定要删除问题记录 #${issueToDelete?.id || ""} 吗？此操作无法撤销。`}
+      />
     </div>
   )
 }
