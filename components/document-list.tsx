@@ -12,6 +12,7 @@ import { Download, Search, FileText, FileWarning, ChevronDown, ChevronUp, Extern
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { DocumentPreviewDialog } from "@/components/document-preview-dialog"
+import { InspectionRecordPreviewDialog } from "@/components/inspection-record-preview-dialog"
 
 interface DocumentListProps {
   documents: GeneratedDocument[]
@@ -33,6 +34,15 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
     isOpen: false,
     document: null,
     issue: null,
+  })
+  const [previewInspectionRecord, setPreviewInspectionRecord] = useState<{
+    isOpen: boolean
+    document: GeneratedDocument | null
+    issues: IssueCard[]
+  }>({
+    isOpen: false,
+    document: null,
+    issues: [],
   })
 
   const toggleRowExpand = (documentId: string) => {
@@ -87,8 +97,9 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
   }
 
   const handleDownloadClick = (document: GeneratedDocument) => {
-    // 对于通知单类型的文档，显示预览对话框
+    // 根据文档类型显示不同的预览对话框
     if (document.documentType === "通知单" && document.sourceCardIds.length > 0) {
+      // 通知单只关联一个问题卡片
       const issueId = document.sourceCardIds[0]
       const issue = issues.find((i) => i.id === issueId)
 
@@ -97,6 +108,17 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
           isOpen: true,
           document,
           issue,
+        })
+      }
+    } else if (document.documentType === "巡检记录" && document.sourceCardIds.length > 0) {
+      // 巡检记录可能关联多个问题卡片
+      const relatedIssues = getIssuesByIds(document.sourceCardIds)
+
+      if (relatedIssues.length > 0) {
+        setPreviewInspectionRecord({
+          isOpen: true,
+          document,
+          issues: relatedIssues,
         })
       }
     } else {
@@ -111,6 +133,14 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
       isOpen: false,
       document: null,
       issue: null,
+    })
+  }
+
+  const handleCloseInspectionPreview = () => {
+    setPreviewInspectionRecord({
+      isOpen: false,
+      document: null,
+      issues: [],
     })
   }
 
@@ -270,6 +300,16 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
           onClose={handleClosePreview}
           issue={previewDocument.issue}
           documentId={previewDocument.document.documentIdentifier}
+        />
+      )}
+
+      {previewInspectionRecord.isOpen && previewInspectionRecord.document && (
+        <InspectionRecordPreviewDialog
+          isOpen={previewInspectionRecord.isOpen}
+          onClose={handleCloseInspectionPreview}
+          issues={previewInspectionRecord.issues}
+          documentId={previewInspectionRecord.document.documentIdentifier}
+          generatedByName={previewInspectionRecord.document.generatedByName}
         />
       )}
     </div>
