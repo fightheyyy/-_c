@@ -14,6 +14,7 @@ import { FilePlus, Merge, MessageSquare } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { GroupedIssueList } from "@/components/grouped-issue-list"
 import { FeishuChatSimulator } from "@/components/feishu-chat-simulator"
+import { DocumentPreviewDialog } from "@/components/document-preview-dialog"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -32,6 +33,17 @@ export default function DashboardPage() {
   })
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
   const [showChatSimulator, setShowChatSimulator] = useState(false)
+  const [previewIssue, setPreviewIssue] = useState<{
+    isOpen: boolean
+    issue: IssueCard | null
+    documentType: "notice" | "record"
+    documentId: string | null
+  }>({
+    isOpen: false,
+    issue: null,
+    documentType: "notice",
+    documentId: null,
+  })
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -115,6 +127,22 @@ export default function DashboardPage() {
       return
     }
 
+    const documentId =
+      type === "notice"
+        ? `SN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${documents.filter((d) => d.documentType === "通知单").length + 1}`.padEnd(
+            4,
+            "0",
+          )
+        : `IR-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${documents.filter((d) => d.documentType === "巡检记录").length + 1}`.padEnd(
+            4,
+            "0",
+          )
+
+    // 直接创建文档，不显示预览
+    createDocument(type, documentId)
+  }
+
+  const createDocument = (type: "notice" | "record", documentId: string) => {
     const newDocument: GeneratedDocument = {
       id: `DOC-${Date.now().toString().slice(-6)}`,
       documentType: type === "notice" ? "通知单" : "巡检记录",
@@ -123,16 +151,7 @@ export default function DashboardPage() {
       generatedByName: user?.name || "未知用户",
       sourceCardIds: [...selectedIssues],
       documentUrl: "#",
-      documentIdentifier:
-        type === "notice"
-          ? `SN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${documents.filter((d) => d.documentType === "通知单").length + 1}`.padEnd(
-              4,
-              "0",
-            )
-          : `IR-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${documents.filter((d) => d.documentType === "巡检记录").length + 1}`.padEnd(
-              4,
-              "0",
-            ),
+      documentIdentifier: documentId,
     }
 
     setDocuments((prev) => [newDocument, ...prev])
@@ -153,11 +172,20 @@ export default function DashboardPage() {
 
     toast({
       title: "文档已生成",
-      description: `${type === "notice" ? "监理通知单" : "巡检记录"} ${newDocument.documentIdentifier} 已成功生成`,
+      description: `${type === "notice" ? "监理通知单" : "巡检记录"} ${documentId} 已成功生成`,
     })
 
     // Switch to documents tab
     setActiveTab("documents")
+  }
+
+  const handlePreviewClose = () => {
+    setPreviewIssue({
+      isOpen: false,
+      issue: null,
+      documentType: "notice",
+      documentId: null,
+    })
   }
 
   const handleMergeIssues = () => {
@@ -236,7 +264,6 @@ export default function DashboardPage() {
     })
   }
 
-  // Add document deletion handler
   const handleDocumentDelete = (documentId: string) => {
     // Remove the document from the documents list
     const updatedDocuments = documents.filter((doc) => doc.id !== documentId)
@@ -383,6 +410,15 @@ export default function DashboardPage() {
           <DocumentList documents={documents} issues={issueCards} onDocumentDelete={handleDocumentDelete} />
         </TabsContent>
       </Tabs>
+
+      {previewIssue.isOpen && previewIssue.issue && (
+        <DocumentPreviewDialog
+          isOpen={previewIssue.isOpen}
+          onClose={handlePreviewClose}
+          issue={previewIssue.issue}
+          documentId={previewIssue.documentId || undefined}
+        />
+      )}
     </div>
   )
 }

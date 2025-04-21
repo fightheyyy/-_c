@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Download, Search, FileText, FileWarning, ChevronDown, ChevronUp, ExternalLink, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
+import { DocumentPreviewDialog } from "@/components/document-preview-dialog"
 
 interface DocumentListProps {
   documents: GeneratedDocument[]
@@ -24,6 +25,15 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<GeneratedDocument | null>(null)
+  const [previewDocument, setPreviewDocument] = useState<{
+    isOpen: boolean
+    document: GeneratedDocument | null
+    issue: IssueCard | null
+  }>({
+    isOpen: false,
+    document: null,
+    issue: null,
+  })
 
   const toggleRowExpand = (documentId: string) => {
     const newExpandedRows = new Set(expandedRows)
@@ -74,6 +84,34 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
   const handleDeleteCancel = () => {
     setDeleteConfirmOpen(false)
     setDocumentToDelete(null)
+  }
+
+  const handleDownloadClick = (document: GeneratedDocument) => {
+    // 对于通知单类型的文档，显示预览对话框
+    if (document.documentType === "通知单" && document.sourceCardIds.length > 0) {
+      const issueId = document.sourceCardIds[0]
+      const issue = issues.find((i) => i.id === issueId)
+
+      if (issue) {
+        setPreviewDocument({
+          isOpen: true,
+          document,
+          issue,
+        })
+      }
+    } else {
+      // 对于其他类型的文档，直接下载
+      console.log("Downloading document:", document.documentIdentifier)
+      // 这里可以添加其他类型文档的下载逻辑
+    }
+  }
+
+  const handleClosePreview = () => {
+    setPreviewDocument({
+      isOpen: false,
+      document: null,
+      issue: null,
+    })
   }
 
   if (documents.length === 0) {
@@ -161,7 +199,12 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
                     <TableCell>{document.generatedByName}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" className="h-8 gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1"
+                          onClick={() => handleDownloadClick(document)}
+                        >
                           <Download className="h-3 w-3" />
                           下载
                         </Button>
@@ -220,6 +263,15 @@ export function DocumentList({ documents, issues, onDocumentDelete }: DocumentLi
         title="确认删除文档"
         description={`您确定要删除${documentToDelete?.documentType || ""}${documentToDelete?.documentIdentifier || ""}吗？此操作无法撤销。`}
       />
+
+      {previewDocument.isOpen && previewDocument.document && previewDocument.issue && (
+        <DocumentPreviewDialog
+          isOpen={previewDocument.isOpen}
+          onClose={handleClosePreview}
+          issue={previewDocument.issue}
+          documentId={previewDocument.document.documentIdentifier}
+        />
+      )}
     </div>
   )
 }
