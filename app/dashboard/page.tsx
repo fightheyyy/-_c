@@ -127,16 +127,13 @@ export default function DashboardPage() {
       return
     }
 
-    const documentId =
-      type === "notice"
-        ? `SN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${documents.filter((d) => d.documentType === "通知单").length + 1}`.padEnd(
-            4,
-            "0",
-          )
-        : `IR-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${documents.filter((d) => d.documentType === "巡检记录").length + 1}`.padEnd(
-            4,
-            "0",
-          )
+    // 使用中国时间（北京时间，UTC+8）
+    const now = new Date()
+    const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+    const documentId = chinaTime
+      .toISOString()
+      .replace(/[-:T.Z]/g, "")
+      .slice(0, 12) // 格式为：年月日时分秒
 
     // 直接创建文档，不显示预览
     createDocument(type, documentId)

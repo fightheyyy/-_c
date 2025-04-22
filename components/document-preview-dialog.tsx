@@ -24,17 +24,22 @@ export function DocumentPreviewDialog({ isOpen, onClose, issue, documentId }: Do
 
     try {
       // 使用文档生成器创建Word文档
-      const docBlob = await generateNoticeDocument(
-        issue,
-        documentId || `SN-${new Date().getTime()}`,
-        issue.reporterName,
-      )
+      const docBlob = await generateNoticeDocument(issue, documentId || `${new Date().getTime()}`, issue.reporterName)
 
       // 创建下载链接
       const url = URL.createObjectURL(docBlob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `监理通知单_${documentId || new Date().getTime()}.docx`
+
+      // 使用中国时间（北京时间，UTC+8）
+      const now = new Date()
+      const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+      const timeStamp = chinaTime
+        .toISOString()
+        .replace(/[-:T.Z]/g, "")
+        .slice(0, 12)
+
+      link.download = `通知单-${documentId || timeStamp}.docx`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
