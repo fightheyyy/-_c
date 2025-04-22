@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
 import type { IssueCard } from "@/lib/types"
+import { generateNoticeDocument } from "@/lib/document-generator"
 
 interface DocumentPreviewDialogProps {
   isOpen: boolean
@@ -22,16 +23,26 @@ export function DocumentPreviewDialog({ isOpen, onClose, issue, documentId }: Do
     setIsDownloading(true)
 
     try {
-      // 在实际应用中，这里会调用API生成Word文档
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // 使用文档生成器创建Word文档
+      const docBlob = await generateNoticeDocument(
+        issue,
+        documentId || `SN-${new Date().getTime()}`,
+        issue.reporterName,
+      )
 
-      // 模拟下载
+      // 创建下载链接
+      const url = URL.createObjectURL(docBlob)
       const link = document.createElement("a")
-      link.href = "#"
+      link.href = url
       link.download = `监理通知单_${documentId || new Date().getTime()}.docx`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+
+      // 清理URL对象
+      setTimeout(() => {
+        URL.revokeObjectURL(url)
+      }, 1000)
 
       onClose()
     } catch (error) {
