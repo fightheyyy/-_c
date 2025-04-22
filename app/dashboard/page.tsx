@@ -321,7 +321,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1"
             >
               <MessageSquare className="h-4 w-4" />
-              模拟飞书聊天
+              飞书聊天
             </Button>
 
             {activeTab === "issues" && selectedIssues.length > 0 && (
