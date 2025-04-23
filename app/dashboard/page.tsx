@@ -15,6 +15,9 @@ import { useToast } from "@/components/ui/use-toast"
 import { GroupedIssueList } from "@/components/grouped-issue-list"
 import { FeishuChatSimulator } from "@/components/feishu-chat-simulator"
 import { DocumentPreviewDialog } from "@/components/document-preview-dialog"
+import { MessagesView } from "@/components/messages-view"
+// 导入事件列表组件
+import { EventList } from "@/components/event-list"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -25,6 +28,8 @@ export default function DashboardPage() {
   const [documents, setDocuments] = useState<GeneratedDocument[]>(mockDocuments)
   const [filteredIssues, setFilteredIssues] = useState<IssueCard[]>(mockIssueCards)
   const [selectedIssues, setSelectedIssues] = useState<string[]>([])
+  // 添加事件相关状态
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<IssueStatus[]>([])
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -33,6 +38,7 @@ export default function DashboardPage() {
   })
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
   const [showChatSimulator, setShowChatSimulator] = useState(false)
+  const [showMessagesView, setShowMessagesView] = useState(false)
   const [previewIssue, setPreviewIssue] = useState<{
     isOpen: boolean
     issue: IssueCard | null
@@ -104,6 +110,15 @@ export default function DashboardPage() {
       setSelectedIssues((prev) => [...prev, issueId])
     } else {
       setSelectedIssues((prev) => prev.filter((id) => id !== issueId))
+    }
+  }
+
+  // 添加事件选择处理函数
+  const handleEventSelect = (eventId: string, selected: boolean) => {
+    if (selected) {
+      setSelectedEvents((prev) => [...prev, eventId])
+    } else {
+      setSelectedEvents((prev) => prev.filter((id) => id !== eventId))
     }
   }
 
@@ -241,6 +256,27 @@ export default function DashboardPage() {
     })
   }
 
+  // 添加合并事件处理函数
+  const handleMergeEvents = () => {
+    if (selectedEvents.length < 2) {
+      toast({
+        title: "选择不足",
+        description: "请至少选择两个事件进行合并",
+        variant: "destructive",
+      })
+      return
+    }
+
+    toast({
+      title: "合并事件",
+      description: `已选择 ${selectedEvents.length} 个事件进行合并`,
+    })
+
+    // 这里应该调用后端API进行事件合并
+    // 合并成功后刷新事件列表
+    setSelectedEvents([])
+  }
+
   const handleNewIssueCreated = (newIssue: IssueCard) => {
     setIssueCards((prev) => [newIssue, ...prev])
   }
@@ -287,6 +323,10 @@ export default function DashboardPage() {
     })
   }
 
+  const handleShowMessages = () => {
+    setShowMessagesView(true)
+  }
+
   if (!isAuthenticated) {
     return null
   }
@@ -301,12 +341,17 @@ export default function DashboardPage() {
     )
   }
 
+  if (showMessagesView) {
+    return <MessagesView onBackToDashboard={() => setShowMessagesView(false)} />
+  }
+
   return (
     <div className="container mx-auto py-6 px-4 md:px-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
           <TabsList className="mb-4 sm:mb-0">
             <TabsTrigger value="issues">问题记录</TabsTrigger>
+            <TabsTrigger value="events">事件列表</TabsTrigger>
             <TabsTrigger value="documents">已生成文档</TabsTrigger>
           </TabsList>
 
@@ -319,6 +364,15 @@ export default function DashboardPage() {
             >
               <MessageSquare className="h-4 w-4" />
               飞书聊天
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleShowMessages()}
+              className="flex items-center gap-1"
+            >
+              <MessageSquare className="h-4 w-4" />
+              消息
             </Button>
 
             {activeTab === "issues" && selectedIssues.length > 0 && (
@@ -347,6 +401,13 @@ export default function DashboardPage() {
                   生成巡检记录
                 </Button>
               </>
+            )}
+
+            {activeTab === "events" && selectedEvents.length > 0 && (
+              <Button variant="outline" size="sm" onClick={handleMergeEvents} className="flex items-center gap-1">
+                <Merge className="h-4 w-4" />
+                合并事件 ({selectedEvents.length})
+              </Button>
             )}
           </div>
         </div>
@@ -401,6 +462,19 @@ export default function DashboardPage() {
               documents={documents}
             />
           )}
+        </TabsContent>
+
+        <TabsContent value="events" className="space-y-4">
+          <FilterBar
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+          />
+
+          <EventList selectedEvents={selectedEvents} onEventSelect={handleEventSelect} />
         </TabsContent>
 
         <TabsContent value="documents">

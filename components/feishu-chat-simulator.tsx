@@ -12,6 +12,9 @@ import { Send, ArrowLeft, ImageIcon, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import type { IssueCard } from "@/lib/types"
 
+// 在文件顶部导入新的API服务函数
+import { getRawMessages, generateEvents } from "@/lib/api-service"
+
 interface FeishuChatSimulatorProps {
   onBackToDashboard: () => void
   onNewIssueCreated: (issue: IssueCard) => void
@@ -46,6 +49,10 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+
+  // 在FeishuChatSimulator组件内添加新的状态变量
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+  const [isGeneratingEvents, setIsGeneratingEvents] = useState(false)
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -191,6 +198,75 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
     }
   }
 
+  // 在组件内添加新的useEffect钩子，用于获取原始消息
+  useEffect(() => {
+    const fetchRawMessages = async () => {
+      try {
+        setIsLoadingMessages(true)
+        const data = await getRawMessages()
+        if (data.messages && data.messages.length > 0) {
+          // 转换API返回的消息格式为组件内部使用的格式
+          const formattedMessages = data.messages.map((msg: any) => ({
+            id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            type: msg.type || "text",
+            content: msg.content,
+            sender: msg.sender || "系统",
+            timestamp: new Date(msg.timestamp || Date.now()),
+            imageUrl: msg.imageUrl,
+          }))
+          setMessages(formattedMessages)
+        }
+      } catch (error) {
+        console.error("获取原始消息失败:", error)
+        toast({
+          title: "获取消息失败",
+          description: "无法从服务器获取消息，请稍后重试",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoadingMessages(false)
+      }
+    }
+
+    fetchRawMessages()
+  }, [toast]) // 添加toast作为依赖项
+
+  // 添加处理AI生成事件的函数
+  const handleGenerateEvents = async () => {
+    try {
+      setIsGeneratingEvents(true)
+      const result = await generateEvents()
+
+      toast({
+        title: "事件生成成功",
+        description: `成功生成了 ${result.count || 0} 个事件`,
+      })
+
+      // 如果API返回了新消息，可以添加到当前消息列表
+      if (result.messages && result.messages.length > 0) {
+        const newMessages = result.messages.map((msg: any) => ({
+          id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: msg.type || "text",
+          content: msg.content,
+          sender: msg.sender || "AI助手",
+          timestamp: new Date(msg.timestamp || Date.now()),
+          imageUrl: msg.imageUrl,
+        }))
+
+        setMessages((prev) => [...prev, ...newMessages])
+      }
+    } catch (error) {
+      console.error("生成事件失败:", error)
+      toast({
+        title: "生成事件失败",
+        description: "无法生成事件，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingEvents(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* 聊天头部 */}
@@ -204,71 +280,98 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
             <p className="text-sm text-muted-foreground">25人 · 飞书群聊</p>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGenerateEvents}
+            disabled={isGeneratingEvents}
+            className="flex items-center gap-1"
+          >
+            {isGeneratingEvents ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                生成中...
+              </>
+            ) : (
+              <>AI生成事件</>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* 聊天消息区域 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-        {messages.map((message) => (
-          <div key={message.id} className="flex flex-col">
-            {message.type === "system" ? (
-              <div className="self-center bg-muted px-3 py-1 rounded-md text-xs text-muted-foreground">
-                {message.content}
-              </div>
-            ) : (
-              <div
-                className={`flex gap-2 max-w-[80%] ${
-                  message.sender === currentUser.name ? "self-end flex-row-reverse" : "self-start"
-                }`}
-              >
-                <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
-                  <span className="text-xs">{message.sender.slice(0, 2)}</span>
-                </Avatar>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium">{message.sender}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {message.timestamp.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  </div>
-                  {message.type === "text" && (
-                    <Card
-                      className={`${
-                        message.sender === currentUser.name ? "bg-primary text-primary-foreground" : "bg-background"
-                      }`}
-                    >
-                      <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
-                    </Card>
-                  )}
-                  {message.type === "image" && message.imageUrl && (
-                    <div className="rounded-lg overflow-hidden border max-w-xs">
-                      <Image
-                        src={message.imageUrl || "/placeholder.svg"}
-                        alt="上传的图片"
-                        width={300}
-                        height={200}
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                  {message.type === "ai-processing" && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">{message.content}</span>
-                      </CardContent>
-                    </Card>
-                  )}
-                  {message.type === "ai-response" && (
-                    <Card className="bg-green-50 border-green-200">
-                      <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
-                    </Card>
-                  )}
-                </div>
-              </div>
-            )}
+        {isLoadingMessages ? (
+          <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2">加载消息中...</span>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
+        ) : (
+          <>
+            {messages.map((message) => (
+              <div key={message.id} className="flex flex-col">
+                {message.type === "system" ? (
+                  <div className="self-center bg-muted px-3 py-1 rounded-md text-xs text-muted-foreground">
+                    {message.content}
+                  </div>
+                ) : (
+                  <div
+                    className={`flex gap-2 max-w-[80%] ${
+                      message.sender === currentUser.name ? "self-end flex-row-reverse" : "self-start"
+                    }`}
+                  >
+                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
+                      <span className="text-xs">{message.sender.slice(0, 2)}</span>
+                    </Avatar>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium">{message.sender}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {message.timestamp.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      {message.type === "text" && (
+                        <Card
+                          className={`${
+                            message.sender === currentUser.name ? "bg-primary text-primary-foreground" : "bg-background"
+                          }`}
+                        >
+                          <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
+                        </Card>
+                      )}
+                      {message.type === "image" && message.imageUrl && (
+                        <div className="rounded-lg overflow-hidden border max-w-xs">
+                          <Image
+                            src={message.imageUrl || "/placeholder.svg"}
+                            alt="上传的图片"
+                            width={300}
+                            height={200}
+                            className="object-cover"
+                          />
+                        </div>
+                      )}
+                      {message.type === "ai-processing" && (
+                        <Card>
+                          <CardContent className="p-3 flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm">{message.content}</span>
+                          </CardContent>
+                        </Card>
+                      )}
+                      {message.type === "ai-response" && (
+                        <Card className="bg-green-50 border-green-200">
+                          <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </>
+        )}
       </div>
 
       {/* 输入区域 */}
