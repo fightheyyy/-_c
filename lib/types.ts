@@ -36,27 +36,3 @@ export interface User {
   username: string
   name: string
 }
-
-// 新增事件类型定义
-export interface Event {
-  id: string
-  description: string
-  location: string
-  responsibleParty: string
-  status: "待处理" | "整改中" | "已合并" | "已闭环"
-  createdAt: string
-  updatedAt: string
-  reporterName: string
-  imageUrls?: string[]
-  combined?: boolean
-  combinedFrom?: string[]
-  combinedInto?: string
-}
-
-export interface EventGroup {
-  responsibleParty: string
-  totalCount: number
-  unresolvedCount: number
-  progress: number
-  events: Event[]
-}
