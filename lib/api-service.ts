@@ -37,3 +37,57 @@ export async function generateEvents() {
     throw error
   }
 }
+
+export async function getEvents() {
+  try {
+    const response = await fetch("http://43.139.19.144:8000/events-db")
+    if (!response.ok) {
+      throw new Error(`API错误: ${response.status}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error("获取事件失败:", error)
+    throw error
+  }
+}
+
+export async function deleteEvent(eventId: number) {
+  try {
+    const response = await fetch(`http://43.139.19.144:8000/events-db/${eventId}`, {
+      method: "DELETE",
+    })
+    if (!response.ok) {
+      throw new Error(`API错误: ${response.status}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error("删除事件失败:", error)
+    throw error
+  }
+}
+
+export async function updateEvent(
+  eventId: number,
+  data: {
+    summary?: string
+    category?: string
+    status?: number
+  },
+) {
+  try {
+    const response = await fetch(`http://43.139.19.144:8000/events-db/${eventId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      throw new Error(`API错误: ${response.status}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error("更新事件失败:", error)
+    throw error
+  }
+}
