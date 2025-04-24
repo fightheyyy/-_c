@@ -8,12 +8,56 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
-import { Send, ArrowLeft, ImageIcon, Loader2 } from "lucide-react"
+import { Send, ArrowLeft, ImageIcon, Loader2, Layers, FileText } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import type { IssueCard } from "@/lib/types"
+import axios from "axios"
 
-// 在文件顶部导入新的API服务函数
-import { getRawMessages, generateEvents } from "@/lib/api-service"
+// Add a new interface for the API response
+interface ApiMessage {
+  message_id: string
+  msg_type: string
+  create_time: number
+  sender_id: string
+  message_content: {
+    text: string
+  }
+  image_url: string | null
+  status: string
+}
+
+// Add interface for events-db API response
+interface EventImage {
+  image_key: string
+  sender_id: string
+  timestamp: string
+  image_data: string
+  message_id: string
+}
+
+interface EventMessage {
+  type: string
+  content: string
+  sender_id: string
+  timestamp: string
+  message_id: string
+}
+
+interface Event {
+  category: string
+  summary: string
+  id: number
+  is_merged: boolean
+  create_time: string
+  messages: EventMessage[]
+  candidate_images: EventImage[]
+  status: string
+  update_time: string
+}
+
+interface EventsResponse {
+  events: Event[]
+}
 
 interface FeishuChatSimulatorProps {
   onBackToDashboard: () => void
@@ -46,13 +90,108 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedImages, setSelectedImages] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isClusteringLoading, setIsClusteringLoading] = useState(false)
+  const [isViewCardsLoading, setIsViewCardsLoading] = useState(false) // 新增查看卡片加载状态
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
-  // 在FeishuChatSimulator组件内添加新的状态变量
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
-  const [isGeneratingEvents, setIsGeneratingEvents] = useState(false)
+  // 获取消息
+  const fetchMessages = async () => {
+    setIsLoading(true)
+    try {
+      const response = await axios.get("http://43.139.19.144:8000/get_Messages")
+      const apiMessages: ApiMessage[] = response.data
+
+      // 转换API消息格式为组件使用的格式
+      const convertedMessages: Message[] = apiMessages.map((apiMsg) => {
+        // 确定消息类型
+        let msgType: MessageType = "text"
+        if (apiMsg.msg_type === "image" || apiMsg.image_url) {
+          msgType = "image"
+        }
+
+        return {
+          id: apiMsg.message_id,
+          type: msgType,
+          content: apiMsg.message_content.text || "",
+          sender: apiMsg.sender_id === currentUser.username ? currentUser.name : "其他用户",
+          timestamp: new Date(apiMsg.create_time),
+          imageUrl: apiMsg.image_url || undefined,
+        }
+      })
+
+      // 保留欢迎消息，添加API获取的消息
+      setMessages((prevMessages) => {
+        const welcomeMessage = prevMessages.find((msg) => msg.id === "welcome")
+        return welcomeMessage ? [welcomeMessage, ...convertedMessages] : convertedMessages
+      })
+    } catch (error) {
+      console.error("获取消息失败:", error)
+      toast({
+        title: "获取消息失败",
+        description: "无法从服务器获取消息，请稍后再试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 执行自动聚类
+  const handleAutoClustering = async () => {
+    setIsClusteringLoading(true)
+    try {
+      await axios.get("http://43.139.19.144:8000/generate_events")
+      toast({
+        title: "自动聚类成功",
+        description: "消息已成功聚类处理",
+      })
+    } catch (error) {
+      console.error("自动聚类失败:", error)
+      toast({
+        title: "自动聚类失败",
+        description: "无法完成聚类处理，请稍后再试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsClusteringLoading(false)
+    }
+  }
+
+  // 查看卡片并跳转到问题记录页面
+  const handleViewCards = async () => {
+    setIsViewCardsLoading(true)
+    try {
+      const response = await axios.get<EventsResponse>("http://43.139.19.144:8000/events-db")
+
+      // 这里可以处理返回的事件数据，例如转换为问题卡片格式
+      // 为了简单起见，我们只是获取数据并跳转到问题记录页面
+
+      toast({
+        title: "获取卡片成功",
+        description: `成功获取 ${response.data.events.length} 个问题卡片`,
+      })
+
+      // 跳转到问题记录页面
+      onBackToDashboard()
+    } catch (error) {
+      console.error("获取卡片失败:", error)
+      toast({
+        title: "获取卡片失败",
+        description: "无法获取问题卡片数据，请稍后再试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsViewCardsLoading(false)
+    }
+  }
+
+  // 组件挂载时获取消息
+  useEffect(() => {
+    fetchMessages()
+  }, [])
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -108,6 +247,15 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
     }
     setMessages((prev) => [...prev, newMessage])
     setInputMessage("")
+
+    // 这里可以添加发送消息到API的逻辑
+    // 例如：
+    // axios.post('http://43.139.19.144:8000/send_message', {
+    //   sender_id: currentUser.username,
+    //   message_content: { text: inputMessage },
+    //   msg_type: "text"
+    // })
+    // .catch(error => console.error("发送消息失败:", error));
 
     // 如果@了巡检记录助手，模拟AI响应
     if (isAtBot) {
@@ -198,89 +346,6 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
     }
   }
 
-  // 在组件内添加新的useEffect钩子，用于获取原始消息
-  useEffect(() => {
-    const fetchRawMessages = async () => {
-      try {
-        setIsLoadingMessages(true)
-        const data = await getRawMessages()
-        // 检查数据结构并适当处理
-        if (data && Array.isArray(data)) {
-          // 如果API直接返回消息数组
-          const formattedMessages = data.map((msg: any) => ({
-            id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: msg.type || "text",
-            content: msg.content,
-            sender: msg.sender || "系统",
-            timestamp: new Date(msg.timestamp || Date.now()),
-            imageUrl: msg.imageUrl,
-          }))
-          setMessages(formattedMessages)
-        } else if (data && data.messages && Array.isArray(data.messages)) {
-          // 如果API返回包含messages字段的对象
-          const formattedMessages = data.messages.map((msg: any) => ({
-            id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: msg.type || "text",
-            content: msg.content,
-            sender: msg.sender || "系统",
-            timestamp: new Date(msg.timestamp || Date.now()),
-            imageUrl: msg.imageUrl,
-          }))
-          setMessages(formattedMessages)
-        } else {
-          console.warn("API返回的数据格式不符合预期:", data)
-        }
-      } catch (error) {
-        console.error("获取原始消息失败:", error)
-        toast({
-          title: "获取消息失败",
-          description: "无法从服务器获取消息，请稍后重试",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoadingMessages(false)
-      }
-    }
-
-    fetchRawMessages()
-  }, [toast]) // 添加toast作为依赖项
-
-  // 添加处理AI生成事件的函数
-  const handleGenerateEvents = async () => {
-    try {
-      setIsGeneratingEvents(true)
-      const result = await generateEvents()
-
-      toast({
-        title: "事件生成成功",
-        description: `成功生成了 ${result.count || 0} 个事件`,
-      })
-
-      // 如果API返回了新消息，可以添加到当前消息列表
-      if (result.messages && result.messages.length > 0) {
-        const newMessages = result.messages.map((msg: any) => ({
-          id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          type: msg.type || "text",
-          content: msg.content,
-          sender: msg.sender || "AI助手",
-          timestamp: new Date(msg.timestamp || Date.now()),
-          imageUrl: msg.imageUrl,
-        }))
-
-        setMessages((prev) => [...prev, ...newMessages])
-      }
-    } catch (error) {
-      console.error("生成事件失败:", error)
-      toast({
-        title: "生成事件失败",
-        description: "无法生成事件，请稍后重试",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGeneratingEvents(false)
-    }
-  }
-
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* 聊天头部 */}
@@ -290,7 +355,7 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="font-semibold">监理团队</h2>
+            <h2 className="font-semibold">东方明珠二期工程 - 监理团队</h2>
             <p className="text-sm text-muted-foreground">25人 · 飞书群聊</p>
           </div>
         </div>
@@ -298,94 +363,117 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
           <Button
             variant="outline"
             size="sm"
-            onClick={handleGenerateEvents}
-            disabled={isGeneratingEvents}
+            onClick={handleViewCards}
+            disabled={isViewCardsLoading}
             className="flex items-center gap-1"
           >
-            {isGeneratingEvents ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                生成中...
-              </>
+            {isViewCardsLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <>AI生成事件</>
+              <>
+                <FileText className="h-4 w-4" />
+                查看卡片
+              </>
             )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAutoClustering}
+            disabled={isClusteringLoading}
+            className="flex items-center gap-1"
+          >
+            {isClusteringLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Layers className="h-4 w-4" />
+                自动聚类
+              </>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchMessages}
+            disabled={isLoading}
+            className="flex items-center gap-1"
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "刷新消息"}
           </Button>
         </div>
       </div>
 
       {/* 聊天消息区域 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-        {isLoadingMessages ? (
+        {isLoading ? (
           <div className="flex justify-center items-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <span className="ml-2">加载消息中...</span>
           </div>
         ) : (
-          <>
-            {messages.map((message) => (
-              <div key={message.id} className="flex flex-col">
-                {message.type === "system" ? (
-                  <div className="self-center bg-muted px-3 py-1 rounded-md text-xs text-muted-foreground">
-                    {message.content}
-                  </div>
-                ) : (
-                  <div
-                    className={`flex gap-2 max-w-[80%] ${
-                      message.sender === currentUser.name ? "self-end flex-row-reverse" : "self-start"
-                    }`}
-                  >
-                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
-                      <span className="text-xs">{message.sender.slice(0, 2)}</span>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium">{message.sender}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {message.timestamp.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                      {message.type === "text" && (
-                        <Card
-                          className={`${
-                            message.sender === currentUser.name ? "bg-primary text-primary-foreground" : "bg-background"
-                          }`}
-                        >
-                          <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
-                        </Card>
-                      )}
-                      {message.type === "image" && message.imageUrl && (
-                        <div className="rounded-lg overflow-hidden border max-w-xs">
-                          <Image
-                            src={message.imageUrl || "/placeholder.svg"}
-                            alt="上传的图片"
-                            width={300}
-                            height={200}
-                            className="object-cover"
-                          />
-                        </div>
-                      )}
-                      {message.type === "ai-processing" && (
-                        <Card>
-                          <CardContent className="p-3 flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm">{message.content}</span>
-                          </CardContent>
-                        </Card>
-                      )}
-                      {message.type === "ai-response" && (
-                        <Card className="bg-green-50 border-green-200">
-                          <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
-                        </Card>
-                      )}
+          messages.map((message) => (
+            <div key={message.id} className="flex flex-col">
+              {message.type === "system" ? (
+                <div className="self-center bg-muted px-3 py-1 rounded-md text-xs text-muted-foreground">
+                  {message.content}
+                </div>
+              ) : (
+                <div
+                  className={`flex gap-2 max-w-[80%] ${
+                    message.sender === currentUser.name ? "self-end flex-row-reverse" : "self-start"
+                  }`}
+                >
+                  <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
+                    <span className="text-xs">{message.sender.slice(0, 2)}</span>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium">{message.sender}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {message.timestamp.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
                     </div>
+                    {message.type === "text" && (
+                      <Card
+                        className={`${
+                          message.sender === currentUser.name ? "bg-primary text-primary-foreground" : "bg-background"
+                        }`}
+                      >
+                        <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
+                      </Card>
+                    )}
+                    {message.type === "image" && message.imageUrl && (
+                      <div className="rounded-lg overflow-hidden border max-w-xs">
+                        <Image
+                          src={message.imageUrl || "/placeholder.svg"}
+                          alt="上传的图片"
+                          width={300}
+                          height={200}
+                          className="object-cover"
+                        />
+                      </div>
+                    )}
+                    {message.type === "ai-processing" && (
+                      <Card>
+                        <CardContent className="p-3 flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">{message.content}</span>
+                        </CardContent>
+                      </Card>
+                    )}
+                    {message.type === "ai-response" && (
+                      <Card className="bg-green-50 border-green-200">
+                        <CardContent className="p-3 text-sm whitespace-pre-wrap">{message.content}</CardContent>
+                      </Card>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </>
+                </div>
+              )}
+            </div>
+          ))
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* 输入区域 */}

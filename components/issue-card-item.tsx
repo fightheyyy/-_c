@@ -20,7 +20,6 @@ import {
   ChevronUp,
   ImageIcon,
   Trash2,
-  Tag,
 } from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
@@ -73,14 +72,6 @@ export function IssueCardItem({
     setSelectedImage(null)
   }
 
-  // 从ID中提取事件ID
-  const getEventId = (): number | null => {
-    if (issue.id.startsWith("EV-")) {
-      return Number.parseInt(issue.id.replace("EV-", ""))
-    }
-    return null
-  }
-
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "ring-2 ring-primary" : ""}`}>
       <CardHeader className="p-4 pb-0 flex flex-row items-start justify-between space-y-0">
@@ -93,12 +84,6 @@ export function IssueCardItem({
           />
           <Badge className={`${getStatusColor(issue.status)}`}>{issue.status}</Badge>
           {issue.isMergedCard && <Badge variant="outline">合并卡片</Badge>}
-          {issue.id.startsWith("EV-") && (
-            <Badge variant="outline" className="flex items-center gap-1">
-              <Tag className="h-3 w-3" />
-              事件 {getEventId()}
-            </Badge>
-          )}
         </div>
         <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => onDeleteClick(issue)}>
@@ -139,7 +124,7 @@ export function IssueCardItem({
                   onClick={() => openImageDialog(imageUrl)}
                 >
                   <Image
-                    src={imageUrl || "/exposed-wiring-hazard.png"}
+                    src={imageUrl || "/placeholder.svg"}
                     alt={`问题图片 ${index + 1}`}
                     fill
                     className="object-cover"
@@ -236,12 +221,7 @@ export function IssueCardItem({
         <DialogContent className="max-w-3xl p-0 overflow-hidden">
           {selectedImage && (
             <div className="relative w-full h-[80vh]">
-              <Image
-                src={selectedImage || "/exposed-wiring-hazard.png"}
-                alt="问题图片"
-                fill
-                className="object-contain"
-              />
+              <Image src={selectedImage || "/placeholder.svg"} alt="问题图片" fill className="object-contain" />
             </div>
           )}
         </DialogContent>
