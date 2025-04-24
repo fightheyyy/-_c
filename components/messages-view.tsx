@@ -33,7 +33,15 @@ export function MessagesView({ onBackToDashboard }: MessagesViewProps) {
       try {
         setIsLoading(true)
         const data = await getMessages()
-        setMessages(data.messages || [])
+        // 检查数据结构并适当处理
+        if (data && Array.isArray(data)) {
+          setMessages(data)
+        } else if (data && data.messages && Array.isArray(data.messages)) {
+          setMessages(data.messages)
+        } else {
+          setMessages([])
+          console.warn("API返回的数据格式不符合预期:", data)
+        }
         setError(null)
       } catch (err) {
         setError("获取消息失败，请稍后重试")

@@ -204,8 +204,20 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
       try {
         setIsLoadingMessages(true)
         const data = await getRawMessages()
-        if (data.messages && data.messages.length > 0) {
-          // 转换API返回的消息格式为组件内部使用的格式
+        // 检查数据结构并适当处理
+        if (data && Array.isArray(data)) {
+          // 如果API直接返回消息数组
+          const formattedMessages = data.map((msg: any) => ({
+            id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            type: msg.type || "text",
+            content: msg.content,
+            sender: msg.sender || "系统",
+            timestamp: new Date(msg.timestamp || Date.now()),
+            imageUrl: msg.imageUrl,
+          }))
+          setMessages(formattedMessages)
+        } else if (data && data.messages && Array.isArray(data.messages)) {
+          // 如果API返回包含messages字段的对象
           const formattedMessages = data.messages.map((msg: any) => ({
             id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             type: msg.type || "text",
@@ -215,6 +227,8 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
             imageUrl: msg.imageUrl,
           }))
           setMessages(formattedMessages)
+        } else {
+          console.warn("API返回的数据格式不符合预期:", data)
         }
       } catch (error) {
         console.error("获取原始消息失败:", error)
@@ -276,7 +290,7 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="font-semibold">东方明珠二期工程 - 监理团队</h2>
+            <h2 className="font-semibold">监理团队</h2>
             <p className="text-sm text-muted-foreground">25人 · 飞书群聊</p>
           </div>
         </div>

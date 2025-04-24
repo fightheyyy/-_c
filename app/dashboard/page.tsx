@@ -334,7 +334,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1"
             >
               <MessageSquare className="h-4 w-4" />
-              飞书聊天
+              AI生成事件卡片
             </Button>
             {/* 在"飞书聊天"按钮旁边添加"消息"按钮 */}
             {/* 找到这一行: <Button variant="outline" size="sm" onClick={() => setShowChatSimulator(true)} className="flex items-center gap-1"> */}
@@ -346,7 +346,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1"
             >
               <MessageSquare className="h-4 w-4" />
-              消息
+              飞书聊天
             </Button>
 
             {activeTab === "issues" && selectedIssues.length > 0 && (

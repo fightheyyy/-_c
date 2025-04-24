@@ -1,7 +1,7 @@
 // API服务，用于处理所有与后端的通信
 export async function getMessages() {
   try {
-    const response = await fetch("/api/get_Messages")
+    const response = await fetch("http://43.139.19.144:8000/get_Messages")
     if (!response.ok) {
       throw new Error(`API错误: ${response.status}`)
     }
@@ -14,7 +14,7 @@ export async function getMessages() {
 
 export async function getRawMessages() {
   try {
-    const response = await fetch("/api/get_RawMessages")
+    const response = await fetch("http://43.139.19.144:8000/get_RawMessages")
     if (!response.ok) {
       throw new Error(`API错误: ${response.status}`)
     }
@@ -27,7 +27,7 @@ export async function getRawMessages() {
 
 export async function generateEvents() {
   try {
-    const response = await fetch("/api/generate_events")
+    const response = await fetch("http://43.139.19.144:8000/generate_events")
     if (!response.ok) {
       throw new Error(`API错误: ${response.status}`)
     }
