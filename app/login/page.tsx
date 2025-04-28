@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +16,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { login } = useAuth()
   const { toast } = useToast()
@@ -25,31 +23,14 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setError(null)
 
     try {
-      // 调用API登录
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || "登录失败，请检查用户名和密码")
-      }
-
-      const data = await response.json()
-
-      // 登录成功
+      // Simplified login - just use mock data
       login({
         username,
-        name: username, // 可以根据API返回的用户信息设置真实姓名
-        token: data.access_token,
-        tokenType: data.token_type,
+        name: username,
+        token: "mock-token",
+        tokenType: "Bearer",
       })
 
       toast({
@@ -59,12 +40,9 @@ export default function LoginPage() {
 
       router.push("/dashboard")
     } catch (error) {
-      console.error("Login failed:", error)
-      setError(error instanceof Error ? error.message : "登录失败，请稍后再试")
-
       toast({
         title: "登录失败",
-        description: error instanceof Error ? error.message : "登录失败，请稍后再试",
+        description: "用户名或密码错误",
         variant: "destructive",
       })
     } finally {
@@ -73,12 +51,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <div className="flex justify-center mb-4">
-            <Image src="/clipboard-checkmark-gear.png" alt="Logo" width={80} height={80} className="rounded-lg" />
-          </div>
           <CardTitle className="text-2xl font-bold text-center">巡检记录助手</CardTitle>
           <CardDescription className="text-center">请登录以访问工程巡检记录系统</CardDescription>
         </CardHeader>
@@ -105,7 +80,6 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {error && <div className="text-sm text-destructive">{error}</div>}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>

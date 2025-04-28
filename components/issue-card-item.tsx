@@ -296,8 +296,25 @@ export function IssueCardItem({
     window.open(docUrl, "_blank")
   }
 
+  // const getStatusColor = (status: string) => {
+  //   switch (status) {
+  //     case "待处理":
+  //       return "bg-red-100 text-red-800"
+  //     case "整改中":
+  //       return "bg-yellow-100 text-yellow-800"
+  //     case "待复核":
+  //       return "bg-blue-100 text-blue-800"
+  //     case "已闭环":
+  //       return "bg-green-100 text-green-800"
+  //     case "已合并":
+  //       return "bg-purple-100 text-purple-800"
+  //     default:
+  //       return "bg-gray-100 text-gray-800"
+  //   }
+  // }
+
   return (
-    <Card className={`overflow-hidden transition-all ${isSelected ? "ring-2 ring-primary" : ""}`}>
+    <Card className={`overflow-hidden ${isSelected ? "ring-2 ring-primary" : ""}`}>
       <CardHeader className="p-4 pb-0 flex flex-row items-start justify-between space-y-0">
         <div className="flex items-center gap-2">
           <Checkbox
@@ -541,7 +558,7 @@ export function IssueCardItem({
       </CardContent>
 
       <CardFooter className="p-2 pt-0 flex justify-center">
-        <Button variant="ghost" size="sm" onClick={toggleDetails} className="w-full text-xs">
+        <Button variant="ghost" size="sm" onClick={() => setShowDetails(!showDetails)} className="w-full text-xs">
           {showDetails ? (
             <>
               <ChevronUp className="h-4 w-4 mr-1" /> 收起详情
