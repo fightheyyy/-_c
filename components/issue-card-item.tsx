@@ -130,76 +130,24 @@ export function IssueCardItem({
     setSelectedImage(null)
   }
 
-  // 提取图片URL中的消息ID - 改进版
+  // Optimize the getMessageIdFromImageUrl function to be more efficient
   const getMessageIdFromImageUrl = (url: string): string | null => {
-    console.log("提取消息ID，URL:", url)
+    // First check for om_ pattern which is the message ID format
+    const omMatch = url.match(/om_[a-zA-Z0-9_-]+/)
+    if (omMatch) return omMatch[0]
 
-    // 首先检查URL是否包含完整的API路径格式
-    let match = url.match(/\/api\/image\/(.+)$/)
-    if (match && match[1]) {
-      // 如果匹配到了，进一步检查提取的部分是否是文件名
-      const extracted = match[1]
-      // 如果提取的部分看起来像文件名（包含.jpg, .png等扩展名），尝试从中提取message_id
-      if (/\.(jpg|jpeg|png|gif)$/i.test(extracted)) {
-        // 尝试从文件名中提取message_id格式的部分
-        const msgIdMatch = extracted.match(/om_[a-zA-Z0-9_-]+/)
-        if (msgIdMatch) {
-          console.log("从文件名中提取到的消息ID:", msgIdMatch[0])
-          return msgIdMatch[0]
-        }
-        // 如果没有找到message_id格式，返回整个文件名作为message_id
-        console.log("使用完整文件名作为消息ID:", extracted)
-        return extracted
-      }
-      console.log("从URL提取到的消息ID:", extracted)
-      return extracted
+    // Check for API path format
+    const apiMatch = url.match(/\/api\/image\/(.+)$/)
+    if (apiMatch) {
+      const extracted = apiMatch[1]
+      // Remove file extension if present
+      return /\.(jpg|jpeg|png|gif)$/i.test(extracted) ? extracted.replace(/\.[^/.]+$/, "") : extracted
     }
 
-    // 检查URL是否直接包含消息ID格式（如om_开头）
-    match = url.match(/om_[a-zA-Z0-9_-]+/)
-    if (match) {
-      console.log("从URL提取到的消息ID (消息ID格式):", match[0])
-      return match[0]
-    }
-
-    // 如果URL看起来像完整的图片URL（包含http或https）
-    if (url.startsWith("http")) {
-      // 尝试从URL的路径部分提取可能的message_id
-      const urlObj = new URL(url)
-      const pathParts = urlObj.pathname.split("/")
-      const lastPart = pathParts[pathParts.length - 1]
-
-      // 检查最后一部分是否是文件名
-      if (/\.(jpg|jpeg|png|gif)$/i.test(lastPart)) {
-        // 尝试从文件名中提取message_id格式的部分
-        const msgIdMatch = lastPart.match(/om_[a-zA-Z0-9_-]+/)
-        if (msgIdMatch) {
-          console.log("从完整URL文件名中提取到的消息ID:", msgIdMatch[0])
-          return msgIdMatch[0]
-        }
-        // 如果没有找到message_id格式，返回不带扩展名的文件名
-        const fileNameWithoutExt = lastPart.replace(/\.[^/.]+$/, "")
-        console.log("使用不带扩展名的文件名作为消息ID:", fileNameWithoutExt)
-        return fileNameWithoutExt
-      }
-
-      console.log("从完整URL路径中提取到的可能消息ID:", lastPart)
-      return lastPart
-    }
-
-    // 尝试从URL的最后一部分提取，并去除可能的文件扩展名
+    // Extract last part of URL path as fallback
     const parts = url.split("/")
-    let lastPart = parts[parts.length - 1]
-    // 去除文件扩展名
-    lastPart = lastPart.replace(/\.[^/.]+$/, "")
-
-    if (lastPart && lastPart.length > 0) {
-      console.log("从URL最后部分提取并去除扩展名后的消息ID:", lastPart)
-      return lastPart
-    }
-
-    console.log("无法从URL提取消息ID")
-    return null
+    const lastPart = parts[parts.length - 1].replace(/\.[^/.]+$/, "")
+    return lastPart || null
   }
 
   const handleDeleteImageClick = (imageUrl: string) => {
@@ -221,23 +169,12 @@ export function IssueCardItem({
     setDeleteImageDialogOpen(true)
   }
 
+  // Optimize the confirmDeleteImage function to be more efficient
   const confirmDeleteImage = async () => {
-    console.log("确认删除图片，事件ID:", issue.eventId, "消息ID:", imageToDelete.messageId)
-
-    if (!imageToDelete.messageId) {
+    if (!imageToDelete.messageId || !issue.eventId) {
       toast({
         title: "删除失败",
-        description: "无法删除此图片，未找到对应的消息ID",
-        variant: "destructive",
-      })
-      setDeleteImageDialogOpen(false)
-      return
-    }
-
-    if (!issue.eventId) {
-      toast({
-        title: "删除失败",
-        description: "无法删除此图片，未找到对应的事件ID",
+        description: "无法删除此图片，缺少必要信息",
         variant: "destructive",
       })
       setDeleteImageDialogOpen(false)
@@ -246,12 +183,12 @@ export function IssueCardItem({
 
     setIsDeletingImage(true)
 
-    // 确保事件ID是数字
-    const numericEventId = Number.parseInt(issue.eventId.toString(), 10)
+    // Ensure eventId is a number
+    const numericEventId = Number(issue.eventId)
     if (isNaN(numericEventId)) {
       toast({
         title: "删除失败",
-        description: "事件ID必须是数字",
+        description: "事件ID格式无效",
         variant: "destructive",
       })
       setIsDeletingImage(false)
@@ -259,71 +196,32 @@ export function IssueCardItem({
       return
     }
 
-    console.log("准备发送删除请求")
-
     try {
-      // 使用代理API路由来避免跨域问题
-      const response = await axios.post("/api/proxy/delete-image", {
+      await axios.post("/api/proxy/delete-image", {
         eventId: numericEventId,
         messageId: imageToDelete.messageId,
       })
 
-      console.log("删除图片响应:", response)
-
-      if (response.status === 200) {
-        console.log("删除图片成功")
-        // 从卡片中移除已删除的图片
-        const updatedImageUrls = issue.imageUrls.filter((url) => url !== imageToDelete.url)
-
-        const updatedIssue: IssueCard = {
+      // Optimistically update UI
+      const updatedImageUrls = issue.imageUrls.filter((url) => url !== imageToDelete.url)
+      if (onIssueUpdate) {
+        onIssueUpdate({
           ...issue,
           imageUrls: updatedImageUrls,
-        }
-
-        // 通知父组件更新卡片
-        if (onIssueUpdate) {
-          onIssueUpdate(updatedIssue)
-        }
-
-        toast({
-          title: "删除成功",
-          description: "图片已成功删除",
         })
       }
+
+      toast({
+        title: "删除成功",
+        description: "图片已成功删除",
+      })
     } catch (error: any) {
       console.error("删除图片失败:", error)
-
-      // 详细记录错误信息，帮助调试
-      if (error.response) {
-        // 服务器响应了，但状态码不在2xx范围内
-        console.error("错误响应数据:", error.response.data)
-        console.error("错误响应状态:", error.response.status)
-        console.error("错误响应头:", error.response.headers)
-      } else if (error.request) {
-        // 请求已发出，但没有收到响应
-        console.error("请求已发出但无响应:", error.request)
-      } else {
-        // 设置请求时发生了错误
-        console.error("请求错误:", error.message)
-      }
-
       toast({
         title: "删除失败",
         description: error.response?.data?.error || "无法删除图片，请稍后再试",
         variant: "destructive",
       })
-
-      // 尽管API调用失败，我们仍然在本地更新UI以提供更好的用户体验
-      // 这是一种乐观更新的策略，假设大多数情况下删除会成功
-      console.log("尽管API调用失败，仍然在本地更新UI")
-      const updatedImageUrls = issue.imageUrls.filter((url) => url !== imageToDelete.url)
-      const updatedIssue: IssueCard = {
-        ...issue,
-        imageUrls: updatedImageUrls,
-      }
-      if (onIssueUpdate) {
-        onIssueUpdate(updatedIssue)
-      }
     } finally {
       setIsDeletingImage(false)
       setDeleteImageDialogOpen(false)
