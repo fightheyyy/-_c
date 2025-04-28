@@ -92,16 +92,17 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isClusteringLoading, setIsClusteringLoading] = useState(false)
-  const [isViewCardsLoading, setIsViewCardsLoading] = useState(false) // 新增查看卡片加载状态
+  const [isViewCardsLoading, setIsViewCardsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
-  // 获取消息
+  // 获取消息 - 使用代理API路由
   const fetchMessages = async () => {
     setIsLoading(true)
     try {
-      const response = await axios.get("http://43.139.19.144:8000/get_Messages")
+      // 使用我们的代理API路由而不是直接调用外部API
+      const response = await axios.get("/api/messages")
       const apiMessages: ApiMessage[] = response.data
 
       // 转换API消息格式为组件使用的格式
@@ -139,14 +140,15 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
     }
   }
 
-  // 执行自动聚类
+  // 执行自动聚类 - 使用代理API路由
   const handleAutoClustering = async () => {
     setIsClusteringLoading(true)
     try {
-      await axios.get("http://43.139.19.144:8000/generate_events")
+      // 使用我们的代理API路由
+      await axios.get("/api/generate-events")
       toast({
         title: "自动聚类成功",
-        description: "消息已成功聚类处理",
+        description: "消息已成功聚类处理，请返回问题记录页面查看",
       })
     } catch (error) {
       console.error("自动聚类失败:", error)
@@ -161,26 +163,16 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
   }
 
   // 查看卡片并跳转到问题记录页面
-  const handleViewCards = async () => {
+  const handleViewCards = () => {
     setIsViewCardsLoading(true)
     try {
-      const response = await axios.get<EventsResponse>("http://43.139.19.144:8000/events-db")
-
-      // 这里可以处理返回的事件数据，例如转换为问题卡片格式
-      // 为了简单起见，我们只是获取数据并跳转到问题记录页面
-
-      toast({
-        title: "获取卡片成功",
-        description: `成功获取 ${response.data.events.length} 个问题卡片`,
-      })
-
-      // 跳转到问题记录页面
+      // 直接返回到问题记录页面
       onBackToDashboard()
     } catch (error) {
-      console.error("获取卡片失败:", error)
+      console.error("操作失败:", error)
       toast({
-        title: "获取卡片失败",
-        description: "无法获取问题卡片数据，请稍后再试",
+        title: "操作失败",
+        description: "无法完成操作，请稍后再试",
         variant: "destructive",
       })
     } finally {
@@ -247,15 +239,6 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
     }
     setMessages((prev) => [...prev, newMessage])
     setInputMessage("")
-
-    // 这里可以添加发送消息到API的逻辑
-    // 例如：
-    // axios.post('http://43.139.19.144:8000/send_message', {
-    //   sender_id: currentUser.username,
-    //   message_content: { text: inputMessage },
-    //   msg_type: "text"
-    // })
-    // .catch(error => console.error("发送消息失败:", error));
 
     // 如果@了巡检记录助手，模拟AI响应
     if (isAtBot) {

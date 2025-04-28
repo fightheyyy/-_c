@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress"
 interface GroupedIssueListProps {
   issues: IssueCard[]
   onIssueUpdate: (updatedIssue: IssueCard) => void
-  onIssueDelete: (issueId: string) => void // Add this line
+  onIssueDelete: (issueId: string, eventId: number | null) => void
   selectedIssues: string[]
   onIssueSelect: (issueId: string, selected: boolean) => void
   documents: GeneratedDocument[]
@@ -23,15 +23,15 @@ interface GroupedIssueListProps {
 export function GroupedIssueList({
   issues,
   onIssueUpdate,
-  onIssueDelete, // Add this parameter
+  onIssueDelete,
   selectedIssues,
   onIssueSelect,
   documents,
 }: GroupedIssueListProps) {
   const [editingIssue, setEditingIssue] = useState<IssueCard | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false) // Add this line
-  const [issueToDelete, setIssueToDelete] = useState<IssueCard | null>(null) // Add this line
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [issueToDelete, setIssueToDelete] = useState<IssueCard | null>(null)
 
   const handleEditClick = (issue: IssueCard) => {
     setEditingIssue(issue)
@@ -46,7 +46,6 @@ export function GroupedIssueList({
     setEditingIssue(null)
   }
 
-  // Add these new handlers
   const handleDeleteClick = (issue: IssueCard) => {
     setIssueToDelete(issue)
     setDeleteConfirmOpen(true)
@@ -54,7 +53,7 @@ export function GroupedIssueList({
 
   const handleDeleteConfirm = () => {
     if (issueToDelete) {
-      onIssueDelete(issueToDelete.id)
+      onIssueDelete(issueToDelete.id, issueToDelete.eventId || null)
       setDeleteConfirmOpen(false)
       setIssueToDelete(null)
     }
@@ -167,10 +166,11 @@ export function GroupedIssueList({
                       key={issue.id}
                       issue={issue}
                       onEditClick={handleEditClick}
-                      onDeleteClick={handleDeleteClick} // Add this line
+                      onDeleteClick={handleDeleteClick}
                       isSelected={selectedIssues.includes(issue.id)}
                       onSelect={(selected) => onIssueSelect(issue.id, selected)}
                       relatedDocuments={documents.filter((doc) => doc.sourceCardIds.includes(issue.id))}
+                      onIssueUpdate={onIssueUpdate} // 添加这一行，传递更新函数
                     />
                   ))}
               </div>

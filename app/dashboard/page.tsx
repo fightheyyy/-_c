@@ -1,29 +1,86 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { IssueCardList } from "@/components/issue-card-list"
-import { DocumentList } from "@/components/document-list"
 import { FilterBar } from "@/components/filter-bar"
 import { useAuth } from "@/lib/auth-provider"
-import { mockIssueCards, mockDocuments } from "@/lib/mock-data"
-import type { IssueCard, GeneratedDocument, IssueStatus } from "@/lib/types"
+import type { IssueCard, IssueStatus } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { FilePlus, Merge, MessageSquare } from "lucide-react"
+import { MessageSquare, Loader2, Merge } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { GroupedIssueList } from "@/components/grouped-issue-list"
 import { FeishuChatSimulator } from "@/components/feishu-chat-simulator"
-import { DocumentPreviewDialog } from "@/components/document-preview-dialog"
+import { DocumentGenerationButton } from "@/components/document-generation-button"
+import axios from "axios"
+import { GroupedIssueList } from "@/components/grouped-issue-list"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { MergeConfirmationDialog } from "@/components/merge-confirmation-dialog"
+import debounce from "lodash/debounce"
+import { mockIssueCards } from "@/lib/mock-data" // 导入模拟数据
+
+// 定义API返回的事件数据结构
+interface EventImage {
+  image_key: string
+  sender_id: string
+  timestamp: string
+  image_data: string
+  message_id: string
+}
+
+interface EventMessage {
+  type: string
+  content: string
+  sender_id: string
+  timestamp: string
+  message_id: string
+}
+
+interface Event {
+  category: string
+  summary: string
+  id: number
+  is_merged: boolean
+  create_time: string
+  messages: EventMessage[]
+  candidate_images: EventImage[]
+  status: string
+  update_time: string
+}
+
+interface EventsResponse {
+  events: Event[]
+}
+
+// 状态码映射函数
+const mapStatusCodeToStatus = (statusCode: string): IssueStatus => {
+  switch (statusCode) {
+    case "0":
+      return "待处理"
+    case "1":
+      return "整改中"
+    case "2":
+      return "待复核"
+    case "3":
+      return "已闭环"
+    default:
+      return "待处理"
+  }
+}
 
 export default function DashboardPage() {
   const router = useRouter()
   const { user, isAuthenticated } = useAuth()
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState("issues")
-  const [issueCards, setIssueCards] = useState<IssueCard[]>(mockIssueCards)
-  const [documents, setDocuments] = useState<GeneratedDocument[]>(mockDocuments)
-  const [filteredIssues, setFilteredIssues] = useState<IssueCard[]>(mockIssueCards)
+  const [issueCards, setIssueCards] = useState<IssueCard[]>([])
+  const [filteredIssues, setFilteredIssues] = useState<IssueCard[]>([])
   const [selectedIssues, setSelectedIssues] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<IssueStatus[]>([])
@@ -33,23 +90,263 @@ export default function DashboardPage() {
   })
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
   const [showChatSimulator, setShowChatSimulator] = useState(false)
-  const [previewIssue, setPreviewIssue] = useState<{
-    isOpen: boolean
-    issue: IssueCard | null
-    documentType: "notice" | "record"
-    documentId: string | null
-  }>({
-    isOpen: false,
-    issue: null,
-    documentType: "notice",
-    documentId: null,
-  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [cardToDelete, setCardToDelete] = useState<{ id: string; eventId: number | null }>({ id: "", eventId: null })
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
+  const [isMerging, setIsMerging] = useState(false)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+  const [useMockData, setUseMockData] = useState(true) // 添加状态来控制是否使用模拟数据
+  const CACHE_DURATION = 30000 // 30秒缓存
+
+  // 将fetchIssueCards改为useCallback包装的函数
+  const fetchIssueCards = useCallback(
+    debounce(async () => {
+      setIsLoading(true)
+      try {
+        if (useMockData) {
+          // 使用模拟数据
+          console.log("使用模拟数据")
+          setIssueCards(mockIssueCards)
+          setFilteredIssues(mockIssueCards)
+          setSelectedIssues([])
+          toast({
+            title: "加载模拟数据成功",
+            description: `成功加载 ${mockIssueCards.length} 个模拟问题卡片`,
+          })
+          setIsLoading(false)
+          return
+        }
+
+        const response = await axios.get<EventsResponse>("/api/events")
+
+        if (response.data && response.data.events) {
+          // 将API返回的事件转换为问题卡片格式
+          const cards: IssueCard[] = response.data.events.map((event) => {
+            // 提取第一条消息作为原始输入
+            const firstMessage = event.messages && event.messages.length > 0 ? event.messages[0].content : ""
+
+            // 提取图片URL
+            const imageUrls =
+              event.candidate_images && event.candidate_images.length > 0
+                ? event.candidate_images.map((img) => img.image_data || `/api/image/${img.image_key}`)
+                : ["/placeholder.svg?key=event-image"]
+
+            // 从消息中提取位置和责任单位
+            let location = ""
+            let responsibleParty = ""
+
+            // 尝试从摘要或消息中提取位置
+            const locationMatch = event.summary.match(/(\d+号楼|\w区|\w座)/)
+            if (locationMatch && locationMatch[1]) {
+              location = locationMatch[1]
+            }
+
+            // 责任单位暂时设为默认值，后续可以根据实际数据调整
+            responsibleParty = "待指定"
+
+            return {
+              id: event.id.toString(), // 直接使用数字ID，不添加前缀
+              eventId: event.id, // 保存原始的eventId
+              originalMessageIds: event.messages ? event.messages.map((m) => m.message_id) : [],
+              reporterUserId: event.messages && event.messages.length > 0 ? event.messages[0].sender_id : "unknown",
+              reporterName: "系统聚类",
+              recordTimestamp: event.create_time || new Date().toISOString(),
+              rawTextInput: firstMessage,
+              imageUrls: imageUrls,
+              description: event.summary || "未提供描述",
+              location: location || "未指定位置",
+              responsibleParty: responsibleParty,
+              status: mapStatusCodeToStatus(event.status),
+              lastUpdatedTimestamp: event.update_time || new Date().toISOString(),
+              projectId: "project123",
+              isDeleted: false,
+              isMergedCard: event.is_merged || false,
+            }
+          })
+
+          setIssueCards(cards)
+          setFilteredIssues(cards)
+          setSelectedIssues([])
+
+          toast({
+            title: "获取问题卡片成功",
+            description: `成功获取 ${cards.length} 个问题卡片`,
+          })
+        }
+      } catch (error) {
+        console.error("获取问题卡片失败:", error)
+        toast({
+          title: "获取问题卡片失败",
+          description: "无法获取问题卡片数据，请稍后再试",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }, 500), // 500ms的防抖时间
+    [toast, useMockData], // 依赖项，添加useMockData
+  )
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login")
     }
   }, [isAuthenticated, router])
+
+  const handleDeleteCard = async (cardId: string, eventId: number | null) => {
+    if (!eventId) {
+      toast({
+        title: "删除失败",
+        description: "无法删除此卡片，未找到对应的事件ID",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // 确保eventId是数字类型
+      const numericEventId = Number(eventId)
+
+      // 添加错误处理和详细日志
+      console.log(`尝试删除卡片，ID: ${cardId}, 事件ID: ${numericEventId}`)
+
+      if (useMockData) {
+        // 如果使用模拟数据，只在前端删除
+        setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
+        setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
+        toast({
+          title: "删除成功",
+          description: `卡片 #${cardId} 已成功删除`,
+        })
+        setIsLoading(false)
+        setDeleteDialogOpen(false)
+        return
+      }
+
+      // 修改为使用GET请求删除卡片，直接使用eventId作为路径参数
+      const response = await axios.get(`/api/events/${numericEventId}`, {
+        // 添加超时设置
+        timeout: 10000,
+        // 添加错误处理选项
+        validateStatus: (status) => {
+          return status >= 200 && status < 300 // 只接受2xx状态码为成功
+        },
+      })
+
+      if (response.status === 200) {
+        // 从状态中移除已删除的卡片
+        setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
+        // 如果卡片在选中列表中，也从中移除
+        setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
+
+        toast({
+          title: "删除成功",
+          description: `卡片 #${cardId} 已成功删除`,
+        })
+      }
+    } catch (error: any) {
+      console.error("删除卡片失败:", error)
+      // 提供更详细的错误信息
+      const errorMessage = error.response?.data?.error || error.message || "未知错误"
+      toast({
+        title: "删除失败",
+        description: `无法删除卡片: ${errorMessage}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+      setDeleteDialogOpen(false)
+    }
+  }
+
+  // 合并卡片功能
+  const handleMergeCards = async () => {
+    if (selectedIssues.length < 2) {
+      toast({
+        title: "无法合并",
+        description: "请至少选择两张卡片进行合并",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // 获取选中卡片的eventId
+    const selectedEventIds = selectedIssues
+      .map((id) => {
+        const card = issueCards.find((card) => card.id === id)
+        return card?.eventId
+      })
+      .filter((id): id is number => id !== undefined)
+
+    if (selectedEventIds.length < 2) {
+      toast({
+        title: "无法合并",
+        description: "选中的卡片中没有足够的有效事件ID",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setMergeDialogOpen(true)
+  }
+
+  const confirmMergeCards = async () => {
+    setIsMerging(true)
+    try {
+      // 获取选中卡片的eventId
+      const selectedEventIds = selectedIssues
+        .map((id) => {
+          const card = issueCards.find((card) => card.id === id)
+          return card?.eventId
+        })
+        .filter((id): id is number => id !== undefined)
+
+      if (useMockData) {
+        // 如果使用模拟数据，只在前端模拟合并
+        toast({
+          title: "合并成功",
+          description: "卡片已成功合并（模拟数据）",
+        })
+        setIsMerging(false)
+        setMergeDialogOpen(false)
+        return
+      }
+
+      // 调用合并API
+      const response = await axios.post("/api/merge-events", {
+        event_ids: selectedEventIds,
+      })
+
+      if (response.data) {
+        toast({
+          title: "合并成功",
+          description: "卡片已成功合并，正在刷新数据...",
+        })
+
+        // 刷新卡片列表
+        await fetchIssueCards()
+      }
+    } catch (error) {
+      console.error("合并卡片失败:", error)
+      toast({
+        title: "合并失败",
+        description: "无法合并选中的卡片，请稍后再试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsMerging(false)
+      setMergeDialogOpen(false)
+    }
+  }
+
+  // 组件挂载时获取问题卡片
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchIssueCards()
+    }
+  }, [isAuthenticated, fetchIssueCards])
 
   useEffect(() => {
     let filtered = [...issueCards]
@@ -90,6 +387,7 @@ export default function DashboardPage() {
   }, [issueCards, statusFilter, dateRange, searchQuery])
 
   const handleIssueUpdate = (updatedIssue: IssueCard) => {
+    // 更新本地状态
     const updatedIssues = issueCards.map((issue) => (issue.id === updatedIssue.id ? updatedIssue : issue))
     setIssueCards(updatedIssues)
 
@@ -107,184 +405,38 @@ export default function DashboardPage() {
     }
   }
 
-  const handleGenerateDocument = (type: "notice" | "record") => {
-    if (selectedIssues.length === 0) {
+  const handleIssueDelete = (issueId: string, eventId: number | null) => {
+    // 打开确认对话框
+    setCardToDelete({ id: issueId, eventId })
+    setDeleteDialogOpen(true)
+  }
+
+  // 检查是否有已合并的卡片被选中
+  const hasMergedCardsSelected = selectedIssues.some((id) => {
+    const card = issueCards.find((card) => card.id === id)
+    return card?.status === "已合并"
+  })
+
+  const handleRefreshClick = () => {
+    const now = Date.now()
+    if (now - lastFetchTime > CACHE_DURATION || issueCards.length === 0) {
+      fetchIssueCards()
+      setLastFetchTime(now)
+    } else {
       toast({
-        title: "请选择问题记录",
-        description: "请至少选择一个问题记录以生成文档",
-        variant: "destructive",
+        title: "数据已是最新",
+        description: `数据已在${Math.round((now - lastFetchTime) / 1000)}秒前更新过`,
       })
-      return
     }
-
-    // For notice, only one issue can be selected
-    if (type === "notice" && selectedIssues.length > 1) {
-      toast({
-        title: "选择过多",
-        description: "生成监理通知单只能选择一个问题记录",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // 使用中国时间（北京时间，UTC+8）
-    const now = new Date()
-    const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000)
-    const documentId = chinaTime
-      .toISOString()
-      .replace(/[-:T.Z]/g, "")
-      .slice(0, 12) // 格式为：年月日时分秒
-
-    // 直接创建文档，不显示预览
-    createDocument(type, documentId)
   }
 
-  const createDocument = (type: "notice" | "record", documentId: string) => {
-    const newDocument: GeneratedDocument = {
-      id: `DOC-${Date.now().toString().slice(-6)}`,
-      documentType: type === "notice" ? "通知单" : "巡检记录",
-      generationTimestamp: new Date().toISOString(),
-      generatedByUserId: user?.username || "unknown",
-      generatedByName: user?.name || "未知用户",
-      sourceCardIds: [...selectedIssues],
-      documentUrl: "#",
-      documentIdentifier: documentId,
-    }
-
-    setDocuments((prev) => [newDocument, ...prev])
-
-    // Update issue cards with document reference
-    const updatedIssues = issueCards.map((issue) => {
-      if (selectedIssues.includes(issue.id)) {
-        return {
-          ...issue,
-          generatedDocumentIds: [...(issue.generatedDocumentIds || []), newDocument.id],
-        }
-      }
-      return issue
-    })
-
-    setIssueCards(updatedIssues)
-    setSelectedIssues([])
-
-    toast({
-      title: "文档已生成",
-      description: `${type === "notice" ? "监理通知单" : "巡检记录"} ${documentId} 已成功生成`,
-    })
-
-    // Switch to documents tab
-    setActiveTab("documents")
-  }
-
-  const handlePreviewClose = () => {
-    setPreviewIssue({
-      isOpen: false,
-      issue: null,
-      documentType: "notice",
-      documentId: null,
-    })
-  }
-
-  const handleMergeIssues = () => {
-    if (selectedIssues.length < 2) {
-      toast({
-        title: "选择不足",
-        description: "请至少选择两个问题记录进行合并",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const selectedIssueCards = issueCards.filter((issue) => selectedIssues.includes(issue.id))
-
-    // Create a new merged issue card
-    const mergedIssue: IssueCard = {
-      id: `IR-MERGED-${Date.now().toString().slice(-6)}`,
-      originalMessageIds: selectedIssueCards.flatMap((card) => card.originalMessageIds || []),
-      reporterUserId: selectedIssueCards[0].reporterUserId,
-      reporterName: selectedIssueCards[0].reporterName,
-      recordTimestamp: new Date().toISOString(),
-      rawTextInput: selectedIssueCards.map((card) => card.rawTextInput).join("\n\n"),
-      imageUrls: selectedIssueCards.flatMap((card) => card.imageUrls),
-      description: `[合并问题] ${selectedIssueCards.map((card) => card.description).join("\n")}`,
-      location: selectedIssueCards[0].location,
-      responsibleParty: selectedIssueCards[0].responsibleParty,
-      status: "待处理",
-      lastUpdatedTimestamp: new Date().toISOString(),
-      projectId: selectedIssueCards[0].projectId,
-      isDeleted: false,
-      generatedDocumentIds: [],
-      isMergedCard: true,
-      mergedFromCardIds: selectedIssues,
-    }
-
-    // Update original cards to mark as merged
-    const updatedIssues = issueCards.map((issue) => {
-      if (selectedIssues.includes(issue.id)) {
-        return {
-          ...issue,
-          status: "已合并" as IssueStatus,
-          mergedIntoCardId: mergedIssue.id,
-          lastUpdatedTimestamp: new Date().toISOString(),
-        }
-      }
-      return issue
-    })
-
-    // Add the new merged card
-    setIssueCards([mergedIssue, ...updatedIssues])
-    setSelectedIssues([])
-
-    toast({
-      title: "问题记录已合并",
-      description: `已成功将 ${selectedIssues.length} 个问题记录合并为一个新记录`,
-    })
-  }
-
-  const handleNewIssueCreated = (newIssue: IssueCard) => {
-    setIssueCards((prev) => [newIssue, ...prev])
-  }
-
-  const handleIssueDelete = (issueId: string) => {
-    // Remove the issue from the issues list
-    const updatedIssues = issueCards.filter((issue) => issue.id !== issueId)
-    setIssueCards(updatedIssues)
-
-    // Remove the issue from selected issues if it was selected
-    if (selectedIssues.includes(issueId)) {
-      setSelectedIssues((prev) => prev.filter((id) => id !== issueId))
-    }
-
-    toast({
-      title: "问题记录已删除",
-      description: `问题记录 #${issueId} 已成功删除`,
-    })
-  }
-
-  const handleDocumentDelete = (documentId: string) => {
-    // Remove the document from the documents list
-    const updatedDocuments = documents.filter((doc) => doc.id !== documentId)
-    setDocuments(updatedDocuments)
-
-    // Remove document reference from issue cards
-    const updatedIssues = issueCards.map((issue) => {
-      if (issue.generatedDocumentIds?.includes(documentId)) {
-        return {
-          ...issue,
-          generatedDocumentIds: issue.generatedDocumentIds.filter((id) => id !== documentId),
-        }
-      }
-      return issue
-    })
-    setIssueCards(updatedIssues)
-
-    // Find the document to show in the toast message
-    const deletedDocument = documents.find((doc) => doc.id === documentId)
-
-    toast({
-      title: "文档已删除",
-      description: `${deletedDocument?.documentType || "文档"} ${deletedDocument?.documentIdentifier || ""} 已成功删除`,
-    })
+  // 切换数据源
+  const toggleDataSource = () => {
+    setUseMockData(!useMockData)
+    // 切换后重新加载数据
+    setTimeout(() => {
+      fetchIssueCards()
+    }, 100)
   }
 
   if (!isAuthenticated) {
@@ -294,8 +446,12 @@ export default function DashboardPage() {
   if (showChatSimulator) {
     return (
       <FeishuChatSimulator
-        onBackToDashboard={() => setShowChatSimulator(false)}
-        onNewIssueCreated={handleNewIssueCreated}
+        onBackToDashboard={() => {
+          setShowChatSimulator(false)
+          // 返回到问题记录页面时刷新卡片
+          fetchIssueCards()
+        }}
+        onNewIssueCreated={() => {}} // 不再需要这个回调，因为我们会在返回时刷新
         currentUser={user!}
       />
     )
@@ -303,119 +459,141 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-6 px-4 md:px-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <TabsList className="mb-4 sm:mb-0">
-            <TabsTrigger value="issues">问题记录</TabsTrigger>
-            <TabsTrigger value="documents">已生成文档</TabsTrigger>
-          </TabsList>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h1 className="text-2xl font-bold">问题记录</h1>
 
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+          <Button variant="outline" size="sm" onClick={toggleDataSource} className="flex items-center gap-1">
+            {useMockData ? "使用API数据" : "使用模拟数据"}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowChatSimulator(true)}
+            className="flex items-center gap-1"
+          >
+            <MessageSquare className="h-4 w-4" />
+            飞书聊天
+          </Button>
+
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleRefreshClick}
+            disabled={isLoading}
+            className="flex items-center gap-1"
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "刷新问题卡片"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <FilterBar
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+        />
+
+        <div className="flex justify-between items-center mb-4">
+          {selectedIssues.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">已选择 {selectedIssues.length} 张卡片</span>
+              <Button variant="outline" size="sm" onClick={() => setSelectedIssues([])}>
+                取消选择
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleMergeCards}
+                disabled={selectedIssues.length < 2 || hasMergedCardsSelected}
+                className="flex items-center gap-1"
+              >
+                <Merge className="h-4 w-4" />
+                合并卡片
+              </Button>
+              {/* 添加文档生成按钮 */}
+              <DocumentGenerationButton selectedCardIds={selectedIssues} />
+            </div>
+          )}
+
+          <div className="border rounded-md overflow-hidden flex ml-auto">
             <Button
-              variant="outline"
+              variant={viewMode === "grouped" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setShowChatSimulator(true)}
-              className="flex items-center gap-1"
+              onClick={() => setViewMode("grouped")}
+              className="rounded-none"
             >
-              <MessageSquare className="h-4 w-4" />
-              飞书聊天
+              按责任单位分组
             </Button>
-
-            {activeTab === "issues" && selectedIssues.length > 0 && (
-              <>
-                <Button variant="outline" size="sm" onClick={handleMergeIssues} className="flex items-center gap-1">
-                  <Merge className="h-4 w-4" />
-                  合并卡片 ({selectedIssues.length})
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGenerateDocument("notice")}
-                  className="flex items-center gap-1"
-                  disabled={selectedIssues.length !== 1}
-                >
-                  <FilePlus className="h-4 w-4" />
-                  生成通知单
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGenerateDocument("record")}
-                  className="flex items-center gap-1"
-                >
-                  <FilePlus className="h-4 w-4" />
-                  生成巡检记录
-                </Button>
-              </>
-            )}
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className="rounded-none"
+            >
+              列表视图
+            </Button>
           </div>
         </div>
 
-        <TabsContent value="issues" className="space-y-4">
-          <FilterBar
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-            dateRange={dateRange}
-            setDateRange={setDateRange}
-          />
-
-          <div className="flex justify-end mb-4">
-            <div className="border rounded-md overflow-hidden flex">
-              <Button
-                variant={viewMode === "grouped" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("grouped")}
-                className="rounded-none"
-              >
-                按责任单位分组
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className="rounded-none"
-              >
-                列表视图
-              </Button>
-            </div>
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2">加载问题卡片中...</span>
           </div>
+        ) : filteredIssues.length > 0 ? (
+          <GroupedIssueList
+            issues={filteredIssues}
+            onIssueUpdate={handleIssueUpdate}
+            onIssueDelete={handleIssueDelete}
+            selectedIssues={selectedIssues}
+            onIssueSelect={handleIssueSelect}
+            documents={[]} // 不再需要文档
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <h3 className="text-lg font-medium">暂无问题记录</h3>
+            <p className="text-sm text-muted-foreground mt-1">请在飞书聊天中发送消息并点击"自动聚类"按钮生成问题卡片</p>
+          </div>
+        )}
+      </div>
 
-          {viewMode === "grouped" ? (
-            <GroupedIssueList
-              issues={filteredIssues}
-              onIssueUpdate={handleIssueUpdate}
-              onIssueDelete={handleIssueDelete}
-              selectedIssues={selectedIssues}
-              onIssueSelect={handleIssueSelect}
-              documents={documents}
-            />
-          ) : (
-            <IssueCardList
-              issues={filteredIssues}
-              onIssueUpdate={handleIssueUpdate}
-              onIssueDelete={handleIssueDelete}
-              selectedIssues={selectedIssues}
-              onIssueSelect={handleIssueSelect}
-              documents={documents}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="documents">
-          <DocumentList documents={documents} issues={issueCards} onDocumentDelete={handleDocumentDelete} />
-        </TabsContent>
-      </Tabs>
-
-      {previewIssue.isOpen && previewIssue.issue && (
-        <DocumentPreviewDialog
-          isOpen={previewIssue.isOpen}
-          onClose={handlePreviewClose}
-          issue={previewIssue.issue}
-          documentId={previewIssue.documentId || undefined}
-        />
+      {/* 删除确认对话框 */}
+      {deleteDialogOpen && (
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认删除卡片</AlertDialogTitle>
+              <AlertDialogDescription>
+                您确定要删除卡片 #{cardToDelete.id} 及其所有关联内容吗？此操作无法撤销。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => handleDeleteCard(cardToDelete.id, cardToDelete.eventId)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                删除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
+
+      {/* 合并确认对话框 */}
+      <MergeConfirmationDialog
+        isOpen={mergeDialogOpen}
+        onClose={() => setMergeDialogOpen(false)}
+        onConfirm={confirmMergeCards}
+        selectedCount={selectedIssues.length}
+        isMerging={isMerging}
+      />
     </div>
   )
 }

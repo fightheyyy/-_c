@@ -2,6 +2,7 @@ export type IssueStatus = "待处理" | "整改中" | "待复核" | "已闭环" 
 
 export interface IssueCard {
   id: string
+  eventId?: number // 添加这一行
   originalMessageIds?: string[]
   reporterUserId: string
   reporterName: string
@@ -35,4 +36,12 @@ export interface GeneratedDocument {
 export interface User {
   username: string
   name: string
+}
+
+// 添加API文档类型
+export interface ApiDocument {
+  id: number
+  event_id: number
+  doc_url: string
+  event_summary: string | null
 }

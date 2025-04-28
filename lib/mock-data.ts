@@ -2,7 +2,7 @@ import type { IssueCard, GeneratedDocument } from "./types"
 
 export const mockIssueCards: IssueCard[] = [
   {
-    id: "IR-20250418-001",
+    id: "1001", // 修改为数字字符串ID
     originalMessageIds: ["msg1", "msg2", "msg3"],
     reporterUserId: "user123",
     reporterName: "张明",
@@ -24,18 +24,16 @@ export const mockIssueCards: IssueCard[] = [
     projectId: "project123",
     isDeleted: false,
     generatedDocumentIds: ["DOC-123456"],
+    eventId: 1001, // 保持eventId为数字
   },
   {
-    id: "IR-20250418-002",
+    id: "1002", // 修改为数字字符串ID
     originalMessageIds: ["msg4", "msg5"],
     reporterUserId: "user123",
     reporterName: "张明",
     recordTimestamp: "2025-04-18T11:15:00Z",
     rawTextInput: "C区5楼电气线路敷设不规范，电线未穿管保护，存在安全隐患。责任单位是华电安装公司。",
-    imageUrls: [
-      "/placeholder.svg?height=400&width=400&query=construction site electrical wiring issue 1",
-      "/placeholder.svg?height=400&width=400&query=construction site electrical wiring issue 2",
-    ],
+    imageUrls: ["/exposed-wiring-hazard.png", "/exposed-wiring-hazard.png"],
     description:
       "[C区5楼] 电气线路敷设不规范，电线未按设计要求穿管保护，存在安全隐患和火灾风险。请[华电安装公司]立即整改，确保按照《建筑电气工程施工质量验收规范》GB50303-2015的要求进行施工。",
     location: "C区5楼",
@@ -44,15 +42,16 @@ export const mockIssueCards: IssueCard[] = [
     lastUpdatedTimestamp: "2025-04-18T13:20:00Z",
     projectId: "project123",
     isDeleted: false,
+    eventId: 1002, // 保持eventId为数字
   },
   {
-    id: "IR-20250418-003",
+    id: "1003", // 修改为数字字符串ID
     originalMessageIds: ["msg6"],
     reporterUserId: "user456",
     reporterName: "李强",
     recordTimestamp: "2025-04-18T13:45:00Z",
     rawTextInput: "A区地下室防水施工质量不达标，墙面有渗水现象。责任单位是防水专业分包。",
-    imageUrls: ["/placeholder.svg?height=400&width=400&query=construction site waterproofing issue"],
+    imageUrls: ["/exposed-foundation-leak.png"],
     description:
       "[A区地下室] 防水施工质量不达标，墙面出现明显渗水现象，防水层施工不符合设计要求。请[防水专业分包]按照《地下防水工程质量验收规范》GB50208-2011的要求进行返工处理。",
     location: "A区地下室",
@@ -61,18 +60,16 @@ export const mockIssueCards: IssueCard[] = [
     lastUpdatedTimestamp: "2025-04-18T13:45:00Z",
     projectId: "project123",
     isDeleted: false,
+    eventId: 1003, // 保持eventId为数字
   },
   {
-    id: "IR-20250418-004",
+    id: "1004", // 修改为数字字符串ID
     originalMessageIds: ["msg7", "msg8"],
     reporterUserId: "user789",
     reporterName: "王工",
     recordTimestamp: "2025-04-18T14:30:00Z",
     rawTextInput: "B区外墙脚手架与墙体拉结点不足，存在安全隐患。请总包单位立即整改加固。",
-    imageUrls: [
-      "/placeholder.svg?height=400&width=400&query=construction site scaffold safety issue 1",
-      "/placeholder.svg?height=400&width=400&query=construction site scaffold safety issue 2",
-    ],
+    imageUrls: ["/precarious-scaffold.png"],
     description:
       "[B区外墙] 脚手架与主体结构拉结点数量不足，不符合安全规范要求，存在安全隐患。请[总包单位]立即按方案要求进行整改加固。",
     location: "B区外墙",
@@ -81,15 +78,16 @@ export const mockIssueCards: IssueCard[] = [
     lastUpdatedTimestamp: "2025-04-18T15:10:00Z",
     projectId: "project123",
     isDeleted: false,
+    eventId: 1004, // 保持eventId为数字
   },
   {
-    id: "IR-20250418-005",
+    id: "1005", // 修改为数字字符串ID
     originalMessageIds: ["msg9"],
     reporterUserId: "user123",
     reporterName: "张明",
     recordTimestamp: "2025-04-18T15:45:00Z",
     rawTextInput: "D区2楼卫生间给排水管道安装不符合规范，存在渗漏风险。责任单位是水电安装单位。",
-    imageUrls: ["/placeholder.svg?height=400&width=400&query=construction site plumbing issue"],
+    imageUrls: ["/exposed-construction-pipes.png"],
     description:
       "[D区2楼] 卫生间给排水管道安装不符合规范，管道连接处密封不严，存在渗漏风险。请[水电安装单位]按照《建筑给水排水及采暖工程施工质量验收规范》GB50242-2002的要求进行整改。",
     location: "D区2楼",
@@ -98,80 +96,7 @@ export const mockIssueCards: IssueCard[] = [
     lastUpdatedTimestamp: "2025-04-18T15:45:00Z",
     projectId: "project123",
     isDeleted: false,
-  },
-  {
-    id: "IR-MERGED-123456",
-    originalMessageIds: ["msg10", "msg11", "msg12"],
-    reporterUserId: "user456",
-    reporterName: "李强",
-    recordTimestamp: "2025-04-18T16:20:00Z",
-    rawTextInput: "合并问题：C区电气线路存在多项问题。",
-    imageUrls: [
-      "/placeholder.svg?height=400&width=400&query=construction site electrical issue 1",
-      "/placeholder.svg?height=400&width=400&query=construction site electrical issue 2",
-      "/placeholder.svg?height=400&width=400&query=construction site electrical issue 3",
-    ],
-    description:
-      "[C区] 电气线路存在多项问题：1.电线型号与设计不符；2.接线盒内接头处理不规范；3.部分线路未按要求穿管保护。请[华电安装公司]按照《建筑电气工程施工质量验收规范》GB50303-2015的要求进行全面整改。",
-    location: "C区",
-    responsibleParty: "华电安装公司",
-    status: "待处理",
-    lastUpdatedTimestamp: "2025-04-18T16:20:00Z",
-    projectId: "project123",
-    isDeleted: false,
-    isMergedCard: true,
-    mergedFromCardIds: ["IR-20250418-006", "IR-20250418-007", "IR-20250418-008"],
-  },
-  {
-    id: "IR-20250418-006",
-    originalMessageIds: ["msg10"],
-    reporterUserId: "user456",
-    reporterName: "李强",
-    recordTimestamp: "2025-04-18T16:00:00Z",
-    rawTextInput: "C区电线型号不对，与设计不符。",
-    imageUrls: ["/placeholder.svg?height=400&width=400&query=construction site electrical wire issue"],
-    description: "[C区] 电线型号不对，与设计不符。请[华电安装公司]更换为设计要求的型号。",
-    location: "C区",
-    responsibleParty: "华电安装公司",
-    status: "已合并",
-    lastUpdatedTimestamp: "2025-04-18T16:20:00Z",
-    projectId: "project123",
-    isDeleted: false,
-    mergedIntoCardId: "IR-MERGED-123456",
-  },
-  {
-    id: "IR-20250418-007",
-    originalMessageIds: ["msg11"],
-    reporterUserId: "user456",
-    reporterName: "李强",
-    recordTimestamp: "2025-04-18T16:05:00Z",
-    rawTextInput: "C区接线盒内接头处理不规范。",
-    imageUrls: ["/placeholder.svg?height=400&width=400&query=construction site electrical junction box issue"],
-    description: "[C区] 接线盒内接头处理不规范，存在安全隐患。请[华电安装公司]按规范要求重新处理。",
-    location: "C区",
-    responsibleParty: "华电安装公司",
-    status: "已合并",
-    lastUpdatedTimestamp: "2025-04-18T16:20:00Z",
-    projectId: "project123",
-    isDeleted: false,
-    mergedIntoCardId: "IR-MERGED-123456",
-  },
-  {
-    id: "IR-20250418-008",
-    originalMessageIds: ["msg12"],
-    reporterUserId: "user456",
-    reporterName: "李强",
-    recordTimestamp: "2025-04-18T16:10:00Z",
-    rawTextInput: "C区部分线路未穿管保护。",
-    imageUrls: ["/placeholder.svg?height=400&width=400&query=construction site electrical conduit issue"],
-    description: "[C区] 部分线路未穿管保护，不符合规范要求。请[华电安装公司]按规范要求整改。",
-    location: "C区",
-    responsibleParty: "华电安装公司",
-    status: "已合并",
-    lastUpdatedTimestamp: "2025-04-18T16:20:00Z",
-    projectId: "project123",
-    isDeleted: false,
-    mergedIntoCardId: "IR-MERGED-123456",
+    eventId: 1005, // 保持eventId为数字
   },
 ]
 
@@ -182,7 +107,7 @@ export const mockDocuments: GeneratedDocument[] = [
     generationTimestamp: "2025-04-18T14:35:00Z",
     generatedByUserId: "user123",
     generatedByName: "张明",
-    sourceCardIds: ["IR-20250418-001"],
+    sourceCardIds: ["1001"], // 更新为新的ID格式
     documentUrl: "#",
     documentIdentifier: "SN-20250418-001",
   },
@@ -192,7 +117,7 @@ export const mockDocuments: GeneratedDocument[] = [
     generationTimestamp: "2025-04-18T17:00:00Z",
     generatedByUserId: "user123",
     generatedByName: "张明",
-    sourceCardIds: ["IR-20250418-001", "IR-20250418-002", "IR-20250418-003", "IR-20250418-004", "IR-20250418-005"],
+    sourceCardIds: ["1001", "1002", "1003", "1004", "1005"], // 更新为新的ID格式
     documentUrl: "#",
     documentIdentifier: "IR-20250418-001",
   },
