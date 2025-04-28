@@ -28,15 +28,11 @@ import {
   Loader2,
   ExternalLink,
   File,
-  MessageSquare,
 } from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { DeleteImageDialog } from "@/components/delete-image-dialog"
-import { DeleteMessageDialog } from "@/components/delete-message-dialog"
 import { AssociateImageDialog } from "@/components/associate-image-dialog"
-import { AddMessageDialog } from "@/components/add-message-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ManageMessagesDialog } from "@/components/manage-messages-dialog"
 
 interface IssueCardItemProps {
   issue: IssueCard
@@ -70,18 +66,6 @@ export function IssueCardItem({
   const [generatedDocUrl, setGeneratedDocUrl] = useState<string | null>(null)
   const [apiDocuments, setApiDocuments] = useState<ApiDocument[]>([])
   const [isLoadingDocs, setIsLoadingDocs] = useState(false)
-
-  // 新增状态
-  const [deleteMessageDialogOpen, setDeleteMessageDialogOpen] = useState(false)
-  const [messageToDelete, setMessageToDelete] = useState<{ content: string; messageId: string | null }>({
-    content: "",
-    messageId: null,
-  })
-  const [isDeletingMessage, setIsDeletingMessage] = useState(false)
-  const [addMessageDialogOpen, setAddMessageDialogOpen] = useState(false)
-  const [manageMessagesDialogOpen, setManageMessagesDialogOpen] = useState(false)
-  const [messages, setMessages] = useState<any[]>([])
-
   const { toast } = useToast()
 
   // 获取所有文档
@@ -302,122 +286,6 @@ export function IssueCardItem({
     } finally {
       setIsDeletingImage(false)
       setDeleteImageDialogOpen(false)
-    }
-  }
-
-  // 新增：处理删除消息
-  const handleDeleteMessageClick = (messageContent: string, messageId: string) => {
-    console.log("点击删除消息按钮，消息ID:", messageId)
-    setMessageToDelete({ content: messageContent, messageId })
-    setDeleteMessageDialogOpen(true)
-  }
-
-  // 新增：确认删除消息
-  const confirmDeleteMessage = async () => {
-    console.log("确认删除消息，事件ID:", issue.eventId, "消息ID:", messageToDelete.messageId)
-
-    if (!messageToDelete.messageId) {
-      toast({
-        title: "删除失败",
-        description: "无法删除此消息，未找到对应的消息ID",
-        variant: "destructive",
-      })
-      setDeleteMessageDialogOpen(false)
-      return
-    }
-
-    if (!issue.eventId) {
-      toast({
-        title: "删除失败",
-        description: "无法删除此消息，未找到对应的事件ID",
-        variant: "destructive",
-      })
-      setDeleteMessageDialogOpen(false)
-      return
-    }
-
-    setIsDeletingMessage(true)
-
-    // 确保事件ID是数字
-    const numericEventId = Number.parseInt(issue.eventId.toString(), 10)
-    if (isNaN(numericEventId)) {
-      toast({
-        title: "删除失败",
-        description: "事件ID必须是数字",
-        variant: "destructive",
-      })
-      setIsDeletingMessage(false)
-      setDeleteMessageDialogOpen(false)
-      return
-    }
-
-    try {
-      // 使用代理API路由来避免跨域问题
-      const response = await axios.post("/api/proxy/delete-message", {
-        eventId: numericEventId,
-        messageId: messageToDelete.messageId,
-      })
-
-      console.log("删除消息响应:", response)
-
-      if (response.status === 200) {
-        console.log("删除消息成功")
-
-        // 如果消息是原始输入，则更新卡片
-        if (issue.rawTextInput === messageToDelete.content) {
-          const updatedIssue: IssueCard = {
-            ...issue,
-            rawTextInput: "", // 清空原始输入
-          }
-
-          // 通知父组件更新卡片
-          if (onIssueUpdate) {
-            onIssueUpdate(updatedIssue)
-          }
-        }
-
-        toast({
-          title: "删除成功",
-          description: "消息已成功删除",
-        })
-      }
-    } catch (error: any) {
-      console.error("删除消息失败:", error)
-
-      // 详细记录错误信息
-      if (error.response) {
-        console.error("错误响应数据:", error.response.data)
-        console.error("错误响应状态:", error.response.status)
-      } else if (error.request) {
-        console.error("请求已发出但无响应:", error.request)
-      } else {
-        console.error("请求错误:", error.message)
-      }
-
-      toast({
-        title: "删除失败",
-        description: error.response?.data?.error || "无法删除消息，请稍后再试",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeletingMessage(false)
-      setDeleteMessageDialogOpen(false)
-    }
-  }
-
-  // 新增：处理添加消息
-  const handleAddMessage = (messageContent: string) => {
-    // 更新卡片的原始输入
-    const updatedIssue: IssueCard = {
-      ...issue,
-      rawTextInput: issue.rawTextInput
-        ? `${issue.rawTextInput}\n${messageContent}` // 如果已有内容，则追加
-        : messageContent, // 如果没有内容，则直接设置
-    }
-
-    // 通知父组件更新卡片
-    if (onIssueUpdate) {
-      onIssueUpdate(updatedIssue)
     }
   }
 
@@ -656,30 +524,12 @@ export function IssueCardItem({
                 </div>
               </div>
 
-              {/* 原始输入区域 - 添加删除和添加按钮 */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="font-medium text-sm text-muted-foreground">原始输入</h3>
-                  {issue.status !== "已合并" && (
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => setManageMessagesDialogOpen(true)}
-                      >
-                        <MessageSquare className="h-3 w-3 mr-1" />
-                        管理消息
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                {issue.rawTextInput ? (
+              {issue.rawTextInput && (
+                <div>
+                  <h3 className="font-medium text-sm text-muted-foreground mb-1">原始输入</h3>
                   <p className="text-xs text-muted-foreground">{issue.rawTextInput}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">暂无原始输入</p>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* 显示关联的API文档 */}
               {issue.eventId && (
@@ -800,49 +650,12 @@ export function IssueCardItem({
         isDeleting={isDeletingImage}
       />
 
-      {/* 删除消息确认对话框 */}
-      <DeleteMessageDialog
-        isOpen={deleteMessageDialogOpen}
-        onClose={() => setDeleteMessageDialogOpen(false)}
-        onConfirm={confirmDeleteMessage}
-        messageContent={messageToDelete.content}
-        isDeleting={isDeletingMessage}
-      />
-
-      {/* 添加消息对话框 */}
-      <AddMessageDialog
-        isOpen={addMessageDialogOpen}
-        onClose={() => setAddMessageDialogOpen(false)}
-        eventId={issue.eventId}
-        onMessageAdded={handleAddMessage}
-      />
-
       {/* 关联图片对话框 */}
       <AssociateImageDialog
         isOpen={associateImageDialogOpen}
         onClose={() => setAssociateImageDialogOpen(false)}
         eventId={issue.eventId}
         onImageAssociated={handleAssociateImage}
-      />
-
-      {/* 消息管理对话框 */}
-      <ManageMessagesDialog
-        isOpen={manageMessagesDialogOpen}
-        onClose={() => setManageMessagesDialogOpen(false)}
-        eventId={issue.eventId}
-        onMessagesUpdated={(updatedMessages) => {
-          setMessages(updatedMessages)
-          // 更新卡片的原始输入，使用第一条消息的内容
-          if (updatedMessages.length > 0) {
-            const updatedIssue: IssueCard = {
-              ...issue,
-              rawTextInput: updatedMessages.map((msg) => msg.content).join("\n\n"),
-            }
-            if (onIssueUpdate) {
-              onIssueUpdate(updatedIssue)
-            }
-          }
-        }}
       />
     </Card>
   )
