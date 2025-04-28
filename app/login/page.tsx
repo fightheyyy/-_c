@@ -10,25 +10,63 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-provider"
+import { useToast } from "@/components/ui/use-toast"
+import { Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { login } = useAuth()
+  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
 
     try {
-      // Simulate login
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      login({ username, name: username === "admin" ? "管理员" : "张明" })
+      // 调用API登录
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || "登录失败，请检查用户名和密码")
+      }
+
+      const data = await response.json()
+
+      // 登录成功
+      login({
+        username,
+        name: username, // 可以根据API返回的用户信息设置真实姓名
+        token: data.access_token,
+        tokenType: data.token_type,
+      })
+
+      toast({
+        title: "登录成功",
+        description: "欢迎回来！",
+      })
+
       router.push("/dashboard")
     } catch (error) {
       console.error("Login failed:", error)
+      setError(error instanceof Error ? error.message : "登录失败，请稍后再试")
+
+      toast({
+        title: "登录失败",
+        description: error instanceof Error ? error.message : "登录失败，请稍后再试",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -67,8 +105,16 @@ export default function LoginPage() {
                 required
               />
             </div>
+            {error && <div className="text-sm text-destructive">{error}</div>}
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "登录中..." : "登录"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  登录中...
+                </>
+              ) : (
+                "登录"
+              )}
             </Button>
           </form>
         </CardContent>

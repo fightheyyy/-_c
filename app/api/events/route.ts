@@ -1,9 +1,30 @@
 import { NextResponse } from "next/server"
 import axios from "axios"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     console.log("开始请求API: http://43.139.19.144:8000/events-db")
+
+    // 获取认证令牌
+    let authHeader = ""
+    try {
+      // 从请求头中获取认证令牌
+      const authorizationHeader = request.headers.get("Authorization")
+      if (authorizationHeader) {
+        authHeader = authorizationHeader
+      } else {
+        // 尝试从Cookie中获取令牌
+        const cookies = request.headers.get("cookie")
+        if (cookies) {
+          const tokenMatch = cookies.match(/authToken=([^;]+)/)
+          if (tokenMatch && tokenMatch[1]) {
+            authHeader = `Bearer ${tokenMatch[1]}`
+          }
+        }
+      }
+    } catch (error) {
+      console.error("获取认证令牌失败:", error)
+    }
 
     // 添加更多配置选项来帮助诊断问题
     const response = await axios.get("http://43.139.19.144:8000/events-db", {
@@ -11,6 +32,7 @@ export async function GET() {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        ...(authHeader ? { Authorization: authHeader } : {}),
       },
       // 添加代理配置，如果在某些环境中需要
       // proxy: false, // 禁用代理，直接连接

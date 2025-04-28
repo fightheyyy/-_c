@@ -3,13 +3,20 @@
 import type React from "react"
 
 import { createContext, useContext, useState, useEffect } from "react"
-import type { User } from "@/lib/types"
+
+export interface User {
+  username: string
+  name: string
+  token?: string
+  tokenType?: string
+}
 
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   login: (user: User) => void
   logout: () => void
+  getAuthHeader: () => Record<string, string> | undefined
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   login: () => {},
   logout: () => {},
+  getAuthHeader: () => undefined,
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -50,7 +58,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("user")
   }
 
-  return <AuthContext.Provider value={{ user, isAuthenticated, login, logout }}>{children}</AuthContext.Provider>
+  // 获取认证头
+  const getAuthHeader = () => {
+    if (!user || !user.token) return undefined
+
+    return {
+      Authorization: `${user.tokenType || "Bearer"} ${user.token}`,
+    }
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, isAuthenticated, login, logout, getAuthHeader }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => useContext(AuthContext)

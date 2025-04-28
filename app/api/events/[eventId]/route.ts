@@ -13,9 +13,26 @@ export async function GET(request: Request, { params }: { params: { eventId: str
   try {
     console.log(`尝试通过GET请求删除事件，ID: ${eventId}`)
 
+    // 获取认证令牌
+    let authHeader = ""
+    try {
+      const cookies = request.headers.get("cookie")
+      if (cookies) {
+        const tokenMatch = cookies.match(/authToken=([^;]+)/)
+        if (tokenMatch && tokenMatch[1]) {
+          authHeader = `Bearer ${tokenMatch[1]}`
+        }
+      }
+    } catch (error) {
+      console.error("获取认证令牌失败:", error)
+    }
+
     // 修改API路径，直接使用events-db/{eventId}，不带/delete
     const response = await axios.delete(`http://43.139.19.144:8000/events-db/${eventId}`, {
       timeout: 10000, // 添加超时设置
+      headers: {
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
     })
 
     return NextResponse.json({ success: true }, { status: 200 })

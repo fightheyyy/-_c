@@ -12,13 +12,41 @@ const DEFAULT_TIMEOUT = 10000
 const MAX_RETRIES = 2
 const RETRY_DELAY = 1000
 
+// 获取认证令牌
+const getAuthToken = (): string | null => {
+  if (typeof window === "undefined") return null
+
+  try {
+    const storedUser = localStorage.getItem("user")
+    if (storedUser) {
+      const user = JSON.parse(storedUser)
+      if (user.token) {
+        return `${user.tokenType || "Bearer"} ${user.token}`
+      }
+    }
+  } catch (error) {
+    console.error("获取认证令牌失败:", error)
+  }
+
+  return null
+}
+
 /**
  * 带重试功能的API请求
  */
 export async function fetchWithRetry<T>(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<T> {
   try {
+    // 添加认证头
+    const token = getAuthToken()
+    const headers = new Headers(options.headers || {})
+
+    if (token) {
+      headers.set("Authorization", token)
+    }
+
     const response = await fetch(url, {
       ...options,
+      headers,
       signal: options.signal || AbortSignal.timeout(DEFAULT_TIMEOUT),
     })
 
@@ -43,8 +71,21 @@ export async function fetchWithRetry<T>(url: string, options: RequestInit = {}, 
 export async function getIssueCards(): Promise<IssueCard[]> {
   try {
     console.log("尝试从API获取问题卡片...")
+
+    // 获取认证令牌
+    const token = getAuthToken()
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    }
+
+    if (token) {
+      headers["Authorization"] = token
+    }
+
     const response = await axios.get(`${API_BASE_URL}/events-db`, {
       timeout: DEFAULT_TIMEOUT,
+      headers,
     })
 
     if (response.data && response.data.events) {
@@ -120,6 +161,10 @@ export async function checkApiStatus(): Promise<{
     const startTime = Date.now()
     const response = await axios.get(`${API_BASE_URL}/events-db`, {
       timeout: 5000, // 较短的超时时间用于状态检查
+      headers: {
+        Accept: "application/json",
+        Authorization: getAuthToken() || "",
+      },
     })
     const endTime = Date.now()
 
