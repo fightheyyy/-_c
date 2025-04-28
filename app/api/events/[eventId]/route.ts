@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import axios from "axios"
 
-// 修改GET方法来处理删除操作，使用正确的API路径
+// 修改GET方法来处理删除操作，直接向后端发送GET请求
 export async function GET(request: Request, { params }: { params: { eventId: string } }) {
   // 确保 params 是已解析的
   const { eventId } = params
@@ -13,12 +13,29 @@ export async function GET(request: Request, { params }: { params: { eventId: str
   try {
     console.log(`尝试通过GET请求删除事件，ID: ${eventId}`)
 
-    // 修改API路径，直接使用events-db/{eventId}，不带/delete
-    // 重要：使用GET方法而不是DELETE方法
+    // 获取认证令牌
+    let authHeader = ""
+    try {
+      const cookies = request.headers.get("cookie")
+      if (cookies) {
+        const tokenMatch = cookies.match(/authToken=([^;]+)/)
+        if (tokenMatch && tokenMatch[1]) {
+          authHeader = `Bearer ${tokenMatch[1]}`
+        }
+      }
+    } catch (error) {
+      console.error("获取认证令牌失败:", error)
+    }
+
+    // 直接向后端发送GET请求，不使用/delete路径
     const response = await axios.get(`http://43.139.19.144:8000/events-db/${eventId}`, {
       timeout: 10000, // 添加超时设置
+      headers: {
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
     })
 
+    console.log(`删除事件成功，ID: ${eventId}, 响应:`, response.status)
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
     console.error(`Error deleting event ${eventId} via GET:`, error)

@@ -278,14 +278,9 @@ export default function DashboardPage() {
         return
       }
 
-      // 修改为使用GET请求删除卡片，直接使用eventId作为路径参数
+      // 使用GET请求删除卡片
       const response = await axios.get(`/api/events/${numericEventId}`, {
-        // 添加超时设置
         timeout: 10000,
-        // 添加错误处理选项
-        validateStatus: (status) => {
-          return status >= 200 && status < 300 // 只接受2xx状态码为成功
-        },
       })
 
       if (response.status === 200) {
