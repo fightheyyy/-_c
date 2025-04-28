@@ -16,6 +16,7 @@ import { MoonIcon, SunIcon, Menu, User } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/lib/auth-provider"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { ApiStatusIndicator } from "@/components/api-status-indicator"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
@@ -88,6 +89,10 @@ export function Header() {
               <span className="font-bold">巡检记录助手</span>
             </Link>
           </div>
+
+          {/* 添加API状态指示器 */}
+          <ApiStatusIndicator />
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="mr-2">

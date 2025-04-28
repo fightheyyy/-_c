@@ -6,7 +6,7 @@ import { FilterBar } from "@/components/filter-bar"
 import { useAuth } from "@/lib/auth-provider"
 import type { IssueCard, IssueStatus } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { MessageSquare, Loader2, Merge } from "lucide-react"
+import { MessageSquare, Loader2, Merge, AlertTriangle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { FeishuChatSimulator } from "@/components/feishu-chat-simulator"
 import { DocumentGenerationButton } from "@/components/document-generation-button"
@@ -73,6 +73,56 @@ const mapStatusCodeToStatus = (statusCode: string): IssueStatus => {
     default:
       return "待处理"
   }
+}
+
+// API状态检查组件
+const APIStatusChecker = () => {
+  const [apiStatus, setApiStatus] = useState<"loading" | "online" | "offline">("loading")
+
+  useEffect(() => {
+    const checkAPIStatus = async () => {
+      try {
+        const response = await axios.get("/api/health") // 替换为你的健康检查API端点
+        if (response.status === 200) {
+          setApiStatus("online")
+        } else {
+          setApiStatus("offline")
+        }
+      } catch (error) {
+        console.error("API Health Check Failed:", error)
+        setApiStatus("offline")
+      }
+    }
+
+    checkAPIStatus()
+  }, [])
+
+  let statusText = ""
+  let statusColor = "text-gray-500"
+  let icon = null
+
+  switch (apiStatus) {
+    case "loading":
+      statusText = "检查API状态..."
+      icon = <Loader2 className="h-4 w-4 animate-spin mr-2" />
+      break
+    case "online":
+      statusText = "API连接正常"
+      statusColor = "text-green-500"
+      break
+    case "offline":
+      statusText = "API连接异常"
+      statusColor = "text-red-500"
+      icon = <AlertTriangle className="h-4 w-4 mr-2" />
+      break
+  }
+
+  return (
+    <div className={`flex items-center text-sm ${statusColor}`}>
+      {icon}
+      {statusText}
+    </div>
+  )
 }
 
 export default function DashboardPage() {
@@ -461,6 +511,7 @@ export default function DashboardPage() {
     <div className="container mx-auto py-6 px-4 md:px-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
         <h1 className="text-2xl font-bold">问题记录</h1>
+        <APIStatusChecker />
 
         <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
           <Button variant="outline" size="sm" onClick={toggleDataSource} className="flex items-center gap-1">
