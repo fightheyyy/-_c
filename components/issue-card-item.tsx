@@ -134,26 +134,67 @@ export function IssueCardItem({
   const getMessageIdFromImageUrl = (url: string): string | null => {
     console.log("提取消息ID，URL:", url)
 
-    // 尝试多种匹配模式
-    // 1. 检查URL是否包含api/image路径
+    // 首先检查URL是否包含完整的API路径格式
     let match = url.match(/\/api\/image\/(.+)$/)
     if (match && match[1]) {
-      console.log("从URL提取到的消息ID (模式1):", match[1])
-      return match[1]
+      // 如果匹配到了，进一步检查提取的部分是否是文件名
+      const extracted = match[1]
+      // 如果提取的部分看起来像文件名（包含.jpg, .png等扩展名），尝试从中提取message_id
+      if (/\.(jpg|jpeg|png|gif)$/i.test(extracted)) {
+        // 尝试从文件名中提取message_id格式的部分
+        const msgIdMatch = extracted.match(/om_[a-zA-Z0-9_-]+/)
+        if (msgIdMatch) {
+          console.log("从文件名中提取到的消息ID:", msgIdMatch[0])
+          return msgIdMatch[0]
+        }
+        // 如果没有找到message_id格式，返回整个文件名作为message_id
+        console.log("使用完整文件名作为消息ID:", extracted)
+        return extracted
+      }
+      console.log("从URL提取到的消息ID:", extracted)
+      return extracted
     }
 
-    // 2. 检查URL是否直接包含消息ID格式（如om_开头）
+    // 检查URL是否直接包含消息ID格式（如om_开头）
     match = url.match(/om_[a-zA-Z0-9_-]+/)
     if (match) {
-      console.log("从URL提取到的消息ID (模式2):", match[0])
+      console.log("从URL提取到的消息ID (消息ID格式):", match[0])
       return match[0]
     }
 
-    // 3. 尝试从URL的最后一部分提取
+    // 如果URL看起来像完整的图片URL（包含http或https）
+    if (url.startsWith("http")) {
+      // 尝试从URL的路径部分提取可能的message_id
+      const urlObj = new URL(url)
+      const pathParts = urlObj.pathname.split("/")
+      const lastPart = pathParts[pathParts.length - 1]
+
+      // 检查最后一部分是否是文件名
+      if (/\.(jpg|jpeg|png|gif)$/i.test(lastPart)) {
+        // 尝试从文件名中提取message_id格式的部分
+        const msgIdMatch = lastPart.match(/om_[a-zA-Z0-9_-]+/)
+        if (msgIdMatch) {
+          console.log("从完整URL文件名中提取到的消息ID:", msgIdMatch[0])
+          return msgIdMatch[0]
+        }
+        // 如果没有找到message_id格式，返回不带扩展名的文件名
+        const fileNameWithoutExt = lastPart.replace(/\.[^/.]+$/, "")
+        console.log("使用不带扩展名的文件名作为消息ID:", fileNameWithoutExt)
+        return fileNameWithoutExt
+      }
+
+      console.log("从完整URL路径中提取到的可能消息ID:", lastPart)
+      return lastPart
+    }
+
+    // 尝试从URL的最后一部分提取，并去除可能的文件扩展名
     const parts = url.split("/")
-    const lastPart = parts[parts.length - 1]
+    let lastPart = parts[parts.length - 1]
+    // 去除文件扩展名
+    lastPart = lastPart.replace(/\.[^/.]+$/, "")
+
     if (lastPart && lastPart.length > 0) {
-      console.log("从URL提取到的消息ID (模式3):", lastPart)
+      console.log("从URL最后部分提取并去除扩展名后的消息ID:", lastPart)
       return lastPart
     }
 
