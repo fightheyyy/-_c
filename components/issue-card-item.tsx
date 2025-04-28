@@ -28,7 +28,7 @@ import {
   Loader2,
   ExternalLink,
   File,
-  MessageSquarePlus,
+  MessageSquare,
 } from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { DeleteImageDialog } from "@/components/delete-image-dialog"
@@ -36,6 +36,7 @@ import { DeleteMessageDialog } from "@/components/delete-message-dialog"
 import { AssociateImageDialog } from "@/components/associate-image-dialog"
 import { AddMessageDialog } from "@/components/add-message-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ManageMessagesDialog } from "@/components/manage-messages-dialog"
 
 interface IssueCardItemProps {
   issue: IssueCard
@@ -78,6 +79,8 @@ export function IssueCardItem({
   })
   const [isDeletingMessage, setIsDeletingMessage] = useState(false)
   const [addMessageDialogOpen, setAddMessageDialogOpen] = useState(false)
+  const [manageMessagesDialogOpen, setManageMessagesDialogOpen] = useState(false)
+  const [messages, setMessages] = useState<any[]>([])
 
   const { toast } = useToast()
 
@@ -659,30 +662,14 @@ export function IssueCardItem({
                   <h3 className="font-medium text-sm text-muted-foreground">原始输入</h3>
                   {issue.status !== "已合并" && (
                     <div className="flex gap-1">
-                      {issue.rawTextInput && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() =>
-                            handleDeleteMessageClick(
-                              issue.rawTextInput,
-                              issue.rawTextInput.substring(0, 20) + Date.now(),
-                            )
-                          }
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          删除
-                        </Button>
-                      )}
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={() => setAddMessageDialogOpen(true)}
+                        onClick={() => setManageMessagesDialogOpen(true)}
                       >
-                        <MessageSquarePlus className="h-3 w-3 mr-1" />
-                        添加
+                        <MessageSquare className="h-3 w-3 mr-1" />
+                        管理消息
                       </Button>
                     </div>
                   )}
@@ -836,6 +823,26 @@ export function IssueCardItem({
         onClose={() => setAssociateImageDialogOpen(false)}
         eventId={issue.eventId}
         onImageAssociated={handleAssociateImage}
+      />
+
+      {/* 消息管理对话框 */}
+      <ManageMessagesDialog
+        isOpen={manageMessagesDialogOpen}
+        onClose={() => setManageMessagesDialogOpen(false)}
+        eventId={issue.eventId}
+        onMessagesUpdated={(updatedMessages) => {
+          setMessages(updatedMessages)
+          // 更新卡片的原始输入，使用第一条消息的内容
+          if (updatedMessages.length > 0) {
+            const updatedIssue: IssueCard = {
+              ...issue,
+              rawTextInput: updatedMessages.map((msg) => msg.content).join("\n\n"),
+            }
+            if (onIssueUpdate) {
+              onIssueUpdate(updatedIssue)
+            }
+          }
+        }}
       />
     </Card>
   )
