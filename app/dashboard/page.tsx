@@ -82,17 +82,14 @@ const APIStatusChecker = () => {
   useEffect(() => {
     const checkAPIStatus = async () => {
       try {
-        // 使用events接口而不是health接口
-        const response = await axios.get("/api/events", {
-          timeout: 5000,
-        })
+        const response = await axios.get("/api/health") // 替换为你的健康检查API端点
         if (response.status === 200) {
           setApiStatus("online")
         } else {
           setApiStatus("offline")
         }
       } catch (error) {
-        console.error("API Status Check Failed:", error)
+        console.error("API Health Check Failed:", error)
         setApiStatus("offline")
       }
     }
@@ -262,12 +259,11 @@ export default function DashboardPage() {
       // 确保eventId是数字类型
       const numericEventId = Number(eventId)
 
-      // 添加详细日志
+      // 添加错误处理和详细日志
       console.log(`尝试删除卡片，ID: ${cardId}, 事件ID: ${numericEventId}`)
 
       if (useMockData) {
         // 如果使用模拟数据，只在前端删除
-        console.log("使用模拟数据模式，仅在前端删除卡片")
         setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
         setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
         toast({
@@ -279,14 +275,15 @@ export default function DashboardPage() {
         return
       }
 
-      // 使用GET请求删除卡片
-      console.log(`发送删除请求到: /api/events/${numericEventId}`)
-
+      // 修改为使用GET请求删除卡片，直接使用eventId作为路径参数
       const response = await axios.get(`/api/events/${numericEventId}`, {
+        // 添加超时设置
         timeout: 10000,
+        // 添加错误处理选项
+        validateStatus: (status) => {
+          return status >= 200 && status < 300 // 只接受2xx状态码为成功
+        },
       })
-
-      console.log(`删除请求响应:`, response)
 
       if (response.status === 200) {
         // 从状态中移除已删除的卡片
@@ -298,26 +295,11 @@ export default function DashboardPage() {
           title: "删除成功",
           description: `卡片 #${cardId} 已成功删除`,
         })
-      } else {
-        throw new Error(`请求返回非200状态码: ${response.status}`)
       }
     } catch (error: any) {
       console.error("删除卡片失败:", error)
-
       // 提供更详细的错误信息
-      let errorMessage = "未知错误"
-
-      if (axios.isAxiosError(error)) {
-        errorMessage = error.response?.data?.error || error.message
-        console.error("Axios错误详情:", {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        })
-      } else if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
+      const errorMessage = error.response?.data?.error || error.message || "未知错误"
       toast({
         title: "删除失败",
         description: `无法删除卡片: ${errorMessage}`,

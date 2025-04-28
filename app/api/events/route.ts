@@ -8,17 +8,12 @@ export async function GET(request: Request) {
     // 获取认证令牌
     let authHeader = ""
     try {
-      // 从请求头中获取认证令牌
-      const authorizationHeader = request.headers.get("Authorization")
-      if (authorizationHeader) {
-        authHeader = authorizationHeader
-      } else {
-        // 尝试从Cookie中获取令牌
-        const cookies = request.headers.get("cookie")
-        if (cookies) {
-          const tokenMatch = cookies.match(/authToken=([^;]+)/)
-          if (tokenMatch && tokenMatch[1]) {
-            authHeader = `Bearer ${tokenMatch[1]}`
+      if (typeof window !== "undefined") {
+        const storedUser = localStorage.getItem("user")
+        if (storedUser) {
+          const user = JSON.parse(storedUser)
+          if (user.token) {
+            authHeader = `${user.tokenType || "Bearer"} ${user.token}`
           }
         }
       }
