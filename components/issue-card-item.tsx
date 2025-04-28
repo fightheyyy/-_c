@@ -159,7 +159,19 @@ export function IssueCardItem({
 
     setIsDeletingImage(true)
     try {
-      const response = await axios.delete(`/api/events/${issue.eventId}/images/${imageToDelete.messageId}`)
+      // 直接调用后端API，不通过Next.js的API路由
+      const response = await axios.delete(
+        `http://43.139.19.144:8000/events-db/${issue.eventId}/images/${imageToDelete.messageId}`,
+        {
+          // 添加超时设置
+          timeout: 10000,
+          // 添加跨域支持
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        },
+      )
 
       if (response.status === 200) {
         // 从卡片中移除已删除的图片
@@ -180,11 +192,26 @@ export function IssueCardItem({
           description: "图片已成功删除",
         })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("删除图片失败:", error)
+
+      // 详细记录错误信息，帮助调试
+      if (error.response) {
+        // 服务器响应了，但状态码不在2xx范围内
+        console.error("错误响应数据:", error.response.data)
+        console.error("错误响应状态:", error.response.status)
+        console.error("错误响应头:", error.response.headers)
+      } else if (error.request) {
+        // 请求已发出，但没有收到响应
+        console.error("请求已发出但无响应:", error.request)
+      } else {
+        // 设置请求时发生了错误
+        console.error("请求错误:", error.message)
+      }
+
       toast({
         title: "删除失败",
-        description: "无法删除图片，请稍后再试",
+        description: error.response?.data?.error || "无法删除图片，请稍后再试",
         variant: "destructive",
       })
     } finally {
