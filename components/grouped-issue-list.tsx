@@ -46,9 +46,10 @@ export function GroupedIssueList({
     setEditingIssue(null)
   }
 
+  // 确保onIssueDelete函数正确传递eventId
   const handleDeleteClick = (issue: IssueCard) => {
-    setIssueToDelete(issue)
-    setDeleteConfirmOpen(true)
+    console.log(`GroupedIssueList: 请求删除卡片 ID=${issue.id}, eventId=${issue.eventId}`)
+    onIssueDelete(issue.id, issue.eventId || null)
   }
 
   const handleDeleteConfirm = () => {

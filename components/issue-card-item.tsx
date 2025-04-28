@@ -275,7 +275,14 @@ export function IssueCardItem({
           {issue.isMergedCard && <Badge variant="outline">合并卡片</Badge>}
         </div>
         <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={() => onDeleteClick(issue)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              console.log(`IssueCardItem: 点击删除按钮，ID=${issue.id}, eventId=${issue.eventId}`)
+              onDeleteClick(issue)
+            }}
+          >
             <Trash2 className="h-4 w-4 text-destructive" />
             <span className="sr-only">删除</span>
           </Button>

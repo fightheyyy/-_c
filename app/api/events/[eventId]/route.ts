@@ -7,51 +7,66 @@ export async function GET(request: Request, { params }: { params: { eventId: str
   const { eventId } = params
 
   if (!eventId) {
+    console.error("删除失败: 事件ID为空")
     return NextResponse.json({ error: "事件ID不能为空" }, { status: 400 })
   }
 
+  console.log(`开始处理删除事件请求，ID: ${eventId}`)
+
   try {
-    console.log(`尝试通过GET请求删除事件，ID: ${eventId}`)
+    // 构建完整的后端API URL
+    const apiUrl = `http://43.139.19.144:8000/events-db/${eventId}`
+    console.log(`准备向后端发送GET请求: ${apiUrl}`)
 
-    // 获取认证令牌
-    let authHeader = ""
-    try {
-      const cookies = request.headers.get("cookie")
-      if (cookies) {
-        const tokenMatch = cookies.match(/authToken=([^;]+)/)
-        if (tokenMatch && tokenMatch[1]) {
-          authHeader = `Bearer ${tokenMatch[1]}`
-        }
-      }
-    } catch (error) {
-      console.error("获取认证令牌失败:", error)
-    }
-
-    // 直接向后端发送GET请求，不使用/delete路径
-    const response = await axios.get(`http://43.139.19.144:8000/events-db/${eventId}`, {
+    // 直接向后端发送GET请求
+    const response = await axios.get(apiUrl, {
       timeout: 10000, // 添加超时设置
-      headers: {
-        ...(authHeader ? { Authorization: authHeader } : {}),
-      },
     })
 
-    console.log(`删除事件成功，ID: ${eventId}, 响应:`, response.status)
-    return NextResponse.json({ success: true }, { status: 200 })
+    console.log(`删除事件成功，ID: ${eventId}, 响应状态: ${response.status}`)
+    console.log(`响应数据: ${JSON.stringify(response.data)}`)
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: `成功删除事件 ${eventId}`,
+        status: response.status,
+        data: response.data,
+      },
+      { status: 200 },
+    )
   } catch (error) {
-    console.error(`Error deleting event ${eventId} via GET:`, error)
+    console.error(`删除事件 ${eventId} 失败:`, error)
 
     // 提供更详细的错误信息
     if (axios.isAxiosError(error)) {
       const statusCode = error.response?.status || 500
       const errorMessage = error.response?.data?.error || error.message
+      const errorConfig = {
+        url: error.config?.url,
+        method: error.config?.method,
+        timeout: error.config?.timeout,
+      }
+
+      console.error(`Axios错误详情: 状态码=${statusCode}, 消息=${errorMessage}, 配置=`, errorConfig)
 
       return NextResponse.json(
-        { error: `删除失败: ${errorMessage}`, details: error.response?.data },
+        {
+          error: `删除失败: ${errorMessage}`,
+          details: error.response?.data,
+          config: errorConfig,
+        },
         { status: statusCode },
       )
     }
 
-    return NextResponse.json({ error: "删除事件失败" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "删除事件失败",
+        message: error instanceof Error ? error.message : "未知错误",
+      },
+      { status: 500 },
+    )
   }
 }
 
