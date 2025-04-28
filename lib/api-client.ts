@@ -159,6 +159,7 @@ export async function checkApiStatus(): Promise<{
 }> {
   try {
     const startTime = Date.now()
+    // 使用events-db接口而不是health接口
     const response = await axios.get(`${API_BASE_URL}/events-db`, {
       timeout: 5000, // 较短的超时时间用于状态检查
       headers: {

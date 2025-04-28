@@ -82,14 +82,17 @@ const APIStatusChecker = () => {
   useEffect(() => {
     const checkAPIStatus = async () => {
       try {
-        const response = await axios.get("/api/health") // 替换为你的健康检查API端点
+        // 使用events接口而不是health接口
+        const response = await axios.get("/api/events", {
+          timeout: 5000,
+        })
         if (response.status === 200) {
           setApiStatus("online")
         } else {
           setApiStatus("offline")
         }
       } catch (error) {
-        console.error("API Health Check Failed:", error)
+        console.error("API Status Check Failed:", error)
         setApiStatus("offline")
       }
     }

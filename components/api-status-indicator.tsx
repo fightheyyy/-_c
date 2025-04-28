@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { CheckCircle, XCircle, RefreshCw } from "lucide-react"
-import { checkApiStatus } from "@/lib/api-client"
+import axios from "axios"
 
 export function ApiStatusIndicator() {
   const [status, setStatus] = useState<{
@@ -22,9 +22,15 @@ export function ApiStatusIndicator() {
   const checkStatus = async () => {
     setStatus((prev) => ({ ...prev, isChecking: true }))
     try {
-      const result = await checkApiStatus()
+      // 直接检查events-db接口而不是健康检查接口
+      const response = await axios.get("/api/events", {
+        timeout: 5000,
+      })
+
       setStatus({
-        ...result,
+        isAvailable: response.status === 200,
+        message: response.status === 200 ? "API服务器可用" : `API返回状态码: ${response.status}`,
+        timestamp: new Date().toISOString(),
         isChecking: false,
       })
     } catch (error) {
