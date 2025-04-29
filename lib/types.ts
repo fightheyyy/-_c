@@ -10,14 +10,14 @@ export interface CandidateImage {
 
 export interface IssueCard {
   id: string
-  eventId?: number
+  eventId?: number // 添加这一行
   originalMessageIds?: string[]
   reporterUserId: string
   reporterName: string
   recordTimestamp: string
   rawTextInput: string
   imageUrls: string[]
-  candidateImages?: CandidateImage[] // 确保包含完整的图片对象信息
+  candidateImages?: CandidateImage[] // 添加这一行，存储完整的图片对象信息
   description: string
   location: string
   responsibleParty: string

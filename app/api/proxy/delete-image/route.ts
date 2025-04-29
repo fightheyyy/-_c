@@ -5,12 +5,8 @@ export async function POST(request: Request) {
   try {
     const { eventId, messageId } = await request.json()
 
-    if (!eventId) {
-      return NextResponse.json({ error: "事件ID是必需的" }, { status: 400 })
-    }
-
-    if (!messageId) {
-      return NextResponse.json({ error: "消息ID是必需的" }, { status: 400 })
+    if (!eventId || !messageId) {
+      return NextResponse.json({ error: "事件ID和消息ID都是必需的" }, { status: 400 })
     }
 
     console.log(`代理删除图片请求: 事件ID=${eventId}, 消息ID=${messageId}`)
