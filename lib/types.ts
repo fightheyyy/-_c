@@ -1,5 +1,13 @@
 export type IssueStatus = "待处理" | "整改中" | "待复核" | "已闭环" | "已合并"
 
+export interface CandidateImage {
+  image_key: string
+  sender_id: string
+  timestamp: string
+  image_data: string
+  message_id: string
+}
+
 export interface IssueCard {
   id: string
   eventId?: number // 添加这一行
@@ -9,6 +17,7 @@ export interface IssueCard {
   recordTimestamp: string
   rawTextInput: string
   imageUrls: string[]
+  candidateImages?: CandidateImage[] // 添加这一行，存储完整的图片对象信息
   description: string
   location: string
   responsibleParty: string
