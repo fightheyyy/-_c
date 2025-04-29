@@ -29,7 +29,7 @@ import {
   ExternalLink,
   File,
 } from "lucide-react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DeleteImageDialog } from "@/components/delete-image-dialog"
 import { AssociateImageDialog } from "@/components/associate-image-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -650,6 +650,9 @@ export function IssueCardItem({
       {/* 图片查看对话框 */}
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && closeImageDialog()}>
         <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          <DialogHeader className="absolute top-0 right-0 z-10 p-3">
+            <DialogTitle className="sr-only">问题图片预览</DialogTitle>
+          </DialogHeader>
           {selectedImage && (
             <div className="relative w-full h-[80vh]">
               <Image src={selectedImage || "/placeholder.svg"} alt="问题图片" fill className="object-contain" />
