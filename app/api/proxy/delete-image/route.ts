@@ -3,26 +3,16 @@ import axios from "axios"
 
 export async function POST(request: Request) {
   try {
-    const { eventId, messageId, imageKey } = await request.json()
+    const { eventId, messageId } = await request.json()
 
-    if (!eventId) {
-      return NextResponse.json({ error: "事件ID是必需的" }, { status: 400 })
+    if (!eventId || !messageId) {
+      return NextResponse.json({ error: "事件ID和消息ID都是必需的" }, { status: 400 })
     }
 
-    // 必须提供messageId或imageKey中的一个
-    if (!messageId && !imageKey) {
-      return NextResponse.json({ error: "消息ID或图片键是必需的" }, { status: 400 })
-    }
-
-    // 优先使用messageId，如果提供了的话
-    const idToUse = messageId || imageKey
-
-    console.log(
-      `代理删除图片请求: 事件ID=${eventId}, 使用ID=${idToUse}, 原始messageId=${messageId}, 原始imageKey=${imageKey}`,
-    )
+    console.log(`代理删除图片请求: 事件ID=${eventId}, 消息ID=${messageId}`)
 
     // 记录完整的请求URL以便调试
-    const requestUrl = `http://43.139.19.144:8000/events-db/${eventId}/images/${idToUse}`
+    const requestUrl = `http://43.139.19.144:8000/events-db/${eventId}/images/${messageId}`
     console.log(`发送删除请求到API: ${requestUrl}`)
 
     const response = await axios.delete(requestUrl, {
