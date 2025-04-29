@@ -25,8 +25,8 @@ const nextConfig = {
   swcMinify: true,
   // Increase build timeout
   experimental: {
-    // Optimize compilation
-    optimizeCss: true,
+    // Remove optimizeCss which requires critters
+    // optimizeCss: true,
     // Reduce memory usage
     memoryBasedWorkersCount: true,
   },
