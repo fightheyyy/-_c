@@ -183,7 +183,26 @@ export function IssueCardItem({
       return matchedImage
     }
 
-    console.log("未找到匹配的candidateImage")
+    // 方法5: 如果URL是API路径格式，尝试提取最后一部分作为key
+    if (imageUrl.startsWith("/api/image/")) {
+      const apiKey = imageUrl.split("/").pop()
+      if (apiKey) {
+        matchedImage = issue.candidateImages.find((img) => img.image_key.includes(apiKey))
+        if (matchedImage) {
+          console.log("方法5找到匹配的candidateImage:", matchedImage)
+          return matchedImage
+        }
+      }
+    }
+
+    console.log("未找到匹配的candidateImage，使用第一个可用的candidateImage")
+    // 如果所有方法都失败，但有candidateImages，返回第一个
+    if (issue.candidateImages.length > 0) {
+      console.log("使用第一个candidateImage:", issue.candidateImages[0])
+      return issue.candidateImages[0]
+    }
+
+    console.log("没有可用的candidateImage")
     return null
   }
 
@@ -197,6 +216,11 @@ export function IssueCardItem({
     const omMatch = imageKey.match(/om_[a-zA-Z0-9_-]+/)
     if (omMatch) return omMatch[0]
 
+    // 如果是API路径格式，提取最后一部分
+    if (imageKey.includes("/api/image/")) {
+      return imageKey.split("/").pop() || imageKey
+    }
+
     return imageKey
   }
 
@@ -207,19 +231,32 @@ export function IssueCardItem({
     const candidateImage = findCandidateImageByUrl(imageUrl)
 
     if (!candidateImage) {
-      console.log("未找到对应的candidateImage，使用硬编码的消息ID")
+      console.log("未找到对应的candidateImage，尝试从URL提取消息ID")
 
-      // 如果找不到对应的candidateImage，使用硬编码的消息ID
-      const hardcodedMessageId = "om_x100b4f9bfed66d340f2197bf94e2919"
+      // 尝试从URL中提取可能的消息ID
+      let possibleMessageId = null
+
+      // 如果URL包含om_开头的部分，可能是消息ID
+      const omMatch = imageUrl.match(/om_[a-zA-Z0-9_-]+/)
+      if (omMatch) {
+        possibleMessageId = omMatch[0]
+        console.log("从URL提取的可能消息ID:", possibleMessageId)
+      }
+
+      // 如果URL是API路径格式，尝试提取最后一部分作为消息ID
+      if (!possibleMessageId && imageUrl.startsWith("/api/image/")) {
+        possibleMessageId = imageUrl.split("/").pop()
+        console.log("从API路径提取的可能消息ID:", possibleMessageId)
+      }
 
       // 保存要删除的图片信息
       setImageToDelete({
         url: imageUrl,
-        messageId: hardcodedMessageId,
+        messageId: possibleMessageId,
         candidateImage: null,
       })
 
-      console.log("使用硬编码的消息ID:", hardcodedMessageId)
+      console.log("使用提取的消息ID:", possibleMessageId)
       setDeleteImageDialogOpen(true)
       return
     }
@@ -395,7 +432,7 @@ export function IssueCardItem({
 
     return (
       <div className="text-xs border p-2 rounded bg-gray-50 overflow-auto max-h-40">
-        <div className="font-bold mb-1">CandidateImages 调试信息:</div>
+        <div className="font-bold mb-1">CandidateImages 调试信息 ({issue.candidateImages.length}个):</div>
         {issue.candidateImages.map((img, index) => (
           <div key={index} className="mb-1 pb-1 border-b border-dashed">
             <div>
@@ -407,53 +444,38 @@ export function IssueCardItem({
             <div className="truncate">
               <span className="font-semibold">image_data:</span> {img.image_data}
             </div>
+            <div className="mt-1 flex gap-1">
+              <button
+                className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 rounded"
+                onClick={() => {
+                  // 复制消息ID到剪贴板
+                  navigator.clipboard
+                    .writeText(img.message_id)
+                    .then(() => toast({ title: "已复制消息ID", description: img.message_id }))
+                    .catch((err) => console.error("复制失败:", err))
+                }}
+              >
+                复制ID
+              </button>
+              <button
+                className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-1 rounded"
+                onClick={() => {
+                  // 使用此消息ID测试删除
+                  setImageToDelete({
+                    url: img.image_data || `/api/image/${img.image_key}`,
+                    messageId: img.message_id,
+                    candidateImage: img,
+                  })
+                  setDeleteImageDialogOpen(true)
+                }}
+              >
+                测试删除
+              </button>
+            </div>
           </div>
         ))}
       </div>
     )
-  }
-
-  // 添加一个直接删除指定消息ID的函数
-  const deleteSpecificMessageId = async () => {
-    if (!issue.eventId) {
-      toast({
-        title: "删除失败",
-        description: "无法删除此图片，未找到对应的事件ID",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // 使用示例中的消息ID
-    const messageId = "om_x100b4f9bfed66d340f2197bf94e2919"
-    setIsDeletingImage(true)
-
-    try {
-      console.log("尝试删除指定消息ID:", messageId)
-
-      const response = await axios.post("/api/proxy/delete-image", {
-        eventId: issue.eventId,
-        messageId: messageId,
-      })
-
-      console.log("删除指定消息ID响应:", response)
-
-      if (response.status === 200) {
-        toast({
-          title: "删除成功",
-          description: `成功删除消息ID为 ${messageId} 的图片`,
-        })
-      }
-    } catch (error: any) {
-      console.error("删除指定消息ID失败:", error)
-      toast({
-        title: "删除失败",
-        description: error.response?.data?.error || "无法删除图片，请稍后再试",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeletingImage(false)
-    }
   }
 
   return (
@@ -564,26 +586,6 @@ export function IssueCardItem({
 
           {/* 添加candidateImages调试信息 */}
           {renderCandidateImagesDebug()}
-
-          {/* 添加直接删除指定消息ID的按钮 */}
-          <div className="flex justify-center mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={deleteSpecificMessageId}
-              disabled={isDeletingImage}
-              className="text-xs"
-            >
-              {isDeletingImage ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  删除中...
-                </>
-              ) : (
-                "删除指定消息ID (om_x100b4f9bfed66d340f2197bf94e2919)"
-              )}
-            </Button>
-          </div>
 
           {/* 添加自动生成文档按钮 */}
           {issue.eventId && (
