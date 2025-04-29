@@ -5,7 +5,7 @@ import Image from "next/image"
 import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import axios from "axios"
-import type { IssueCard, GeneratedDocument, IssueStatus, ApiDocument } from "@/lib/types"
+import type { IssueCard, GeneratedDocument, IssueStatus, ApiDocument, CandidateImage } from "@/lib/types"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,15 +45,6 @@ interface IssueCardItemProps {
   onIssueUpdate?: (updatedIssue: IssueCard) => void
 }
 
-// 定义一个映射表，用于存储图片URL到消息ID的映射
-const imageUrlToMessageIdMap = new Map<string, string>()
-
-// 硬编码一些已知的消息ID，用于测试
-imageUrlToMessageIdMap.set(
-  "http://43.139.19.144:8000/get_image/img_v3_02lm_281c3666-cdf4-4ba7-b984-93880879ec5g",
-  "om_x100b4f9bfed66d340f2197bf94e2919",
-)
-
 export function IssueCardItem({
   issue,
   onEditClick,
@@ -66,8 +57,15 @@ export function IssueCardItem({
   const [showDetails, setShowDetails] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [deleteImageDialogOpen, setDeleteImageDialogOpen] = useState(false)
-  const [imageToDelete, setImageToDelete] = useState<string>("")
-  const [messageIdToDelete, setMessageIdToDelete] = useState<string>("")
+  const [imageToDelete, setImageToDelete] = useState<{
+    url: string
+    messageId: string | null
+    candidateImage: CandidateImage | null
+  }>({
+    url: "",
+    messageId: null,
+    candidateImage: null,
+  })
   const [isDeletingImage, setIsDeletingImage] = useState(false)
   const [associateImageDialogOpen, setAssociateImageDialogOpen] = useState(false)
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
@@ -139,60 +137,54 @@ export function IssueCardItem({
     setSelectedImage(null)
   }
 
-  // 查找图片对应的消息ID
-  const findMessageIdForImage = (imageUrl: string): string | null => {
-    console.log("查找图片对应的消息ID，URL:", imageUrl)
+  // 根据图片URL找到对应的candidateImage对象
+  const findCandidateImageByUrl = (imageUrl: string): CandidateImage | null => {
+    console.log("查找图片对应的candidateImage，URL:", imageUrl)
 
-    // 1. 首先检查映射表中是否有这个URL的记录
-    if (imageUrlToMessageIdMap.has(imageUrl)) {
-      const messageId = imageUrlToMessageIdMap.get(imageUrl)
-      console.log("从映射表中找到消息ID:", messageId)
-      return messageId || null
+    // 检查issue是否有candidateImages数组
+    if (!issue.candidateImages || issue.candidateImages.length === 0) {
+      console.log("卡片没有candidateImages数据")
+      return null
     }
 
-    // 2. 检查issue.candidateImages中是否有匹配的记录
-    if (issue.candidateImages && issue.candidateImages.length > 0) {
-      const matchedImage = issue.candidateImages.find(
-        (img) => img.image_data === imageUrl || imageUrl.includes(img.image_key),
-      )
+    // 尝试找到匹配的candidateImage
+    const matchedImage = issue.candidateImages.find(
+      (img) =>
+        img.image_data === imageUrl || // 完全匹配
+        imageUrl.includes(img.image_key) || // URL包含image_key
+        (img.image_key && imageUrl.includes(extractImageKeyFromUrl(img.image_key))), // 提取image_key的一部分进行匹配
+    )
 
-      if (matchedImage) {
-        console.log("从candidateImages中找到匹配的图片，消息ID:", matchedImage.message_id)
-        // 将找到的消息ID添加到映射表中
-        imageUrlToMessageIdMap.set(imageUrl, matchedImage.message_id)
-        return matchedImage.message_id
-      }
+    if (matchedImage) {
+      console.log("找到匹配的candidateImage:", matchedImage)
+      return matchedImage
     }
 
-    // 3. 如果是特定的已知URL，返回硬编码的消息ID
-    if (imageUrl.includes("img_v3_02lm_281c3666-cdf4-4ba7-b984-93880879ec5g")) {
-      const hardcodedMessageId = "om_x100b4f9bfed66d340f2197bf94e2919"
-      console.log("使用硬编码的消息ID:", hardcodedMessageId)
-      // 将硬编码的消息ID添加到映射表中
-      imageUrlToMessageIdMap.set(imageUrl, hardcodedMessageId)
-      return hardcodedMessageId
-    }
-
-    // 4. 尝试从URL中提取om_开头的消息ID
-    const omIdMatch = imageUrl.match(/om_[a-zA-Z0-9_-]+/)
-    if (omIdMatch) {
-      console.log("从URL中提取到om_格式的消息ID:", omIdMatch[0])
-      // 将提取的消息ID添加到映射表中
-      imageUrlToMessageIdMap.set(imageUrl, omIdMatch[0])
-      return omIdMatch[0]
-    }
-
-    console.log("无法找到图片对应的消息ID")
+    console.log("未找到匹配的candidateImage")
     return null
+  }
+
+  // 从image_key中提取关键部分
+  const extractImageKeyFromUrl = (imageKey: string): string => {
+    // 尝试提取img_v3_XXX格式的ID
+    const match = imageKey.match(/img_v3_[a-zA-Z0-9_-]+/)
+    if (match) return match[0]
+
+    // 如果是image_om_XXX.jpg格式，提取om_XXX部分
+    const omMatch = imageKey.match(/om_[a-zA-Z0-9_-]+/)
+    if (omMatch) return omMatch[0]
+
+    return imageKey
   }
 
   const handleDeleteImageClick = (imageUrl: string) => {
     console.log("点击删除图片按钮，图片URL:", imageUrl)
 
-    // 查找图片对应的消息ID
-    const messageId = findMessageIdForImage(imageUrl)
+    // 查找对应的candidateImage
+    const candidateImage = findCandidateImageByUrl(imageUrl)
 
-    if (!messageId) {
+    if (!candidateImage) {
+      console.log("未找到对应的candidateImage，无法删除")
       toast({
         title: "无法删除图片",
         description: "无法找到图片对应的消息ID，请联系管理员",
@@ -201,14 +193,19 @@ export function IssueCardItem({
       return
     }
 
-    // 保存图片URL和消息ID
-    setImageToDelete(imageUrl)
-    setMessageIdToDelete(messageId)
+    // 保存要删除的图片信息
+    setImageToDelete({
+      url: imageUrl,
+      messageId: candidateImage.message_id,
+      candidateImage: candidateImage,
+    })
+
+    console.log("准备删除图片，消息ID:", candidateImage.message_id)
     setDeleteImageDialogOpen(true)
   }
 
   const confirmDeleteImage = async () => {
-    console.log("确认删除图片，事件ID:", issue.eventId, "消息ID:", messageIdToDelete)
+    console.log("确认删除图片，事件ID:", issue.eventId, "消息ID:", imageToDelete.messageId)
 
     if (!issue.eventId) {
       toast({
@@ -220,7 +217,7 @@ export function IssueCardItem({
       return
     }
 
-    if (!messageIdToDelete) {
+    if (!imageToDelete.messageId) {
       toast({
         title: "删除失败",
         description: "无法删除此图片，未找到对应的消息ID",
@@ -232,38 +229,33 @@ export function IssueCardItem({
 
     setIsDeletingImage(true)
 
-    // 确保事件ID是数字
-    const numericEventId = Number.parseInt(issue.eventId.toString(), 10)
-    if (isNaN(numericEventId)) {
-      toast({
-        title: "删除失败",
-        description: "事件ID必须是数字",
-        variant: "destructive",
-      })
-      setIsDeletingImage(false)
-      setDeleteImageDialogOpen(false)
-      return
-    }
-
-    console.log("准备发送删除请求，事件ID:", numericEventId, "消息ID:", messageIdToDelete)
-
     try {
-      // 使用代理API路由来避免跨域问题
+      console.log("发送删除请求，事件ID:", issue.eventId, "消息ID:", imageToDelete.messageId)
+
+      // 使用代理API路由
       const response = await axios.post("/api/proxy/delete-image", {
-        eventId: numericEventId,
-        messageId: messageIdToDelete,
+        eventId: issue.eventId,
+        messageId: imageToDelete.messageId,
       })
 
       console.log("删除图片响应:", response)
 
       if (response.status === 200) {
         console.log("删除图片成功")
+
         // 从卡片中移除已删除的图片
-        const updatedImageUrls = issue.imageUrls.filter((url) => url !== imageToDelete)
+        const updatedImageUrls = issue.imageUrls.filter((url) => url !== imageToDelete.url)
+
+        // 如果有candidateImages，也需要更新
+        let updatedCandidateImages = issue.candidateImages || []
+        if (imageToDelete.candidateImage) {
+          updatedCandidateImages = updatedCandidateImages.filter((img) => img.message_id !== imageToDelete.messageId)
+        }
 
         const updatedIssue: IssueCard = {
           ...issue,
           imageUrls: updatedImageUrls,
+          candidateImages: updatedCandidateImages,
         }
 
         // 通知父组件更新卡片
@@ -283,11 +275,6 @@ export function IssueCardItem({
       if (error.response) {
         console.error("错误响应数据:", error.response.data)
         console.error("错误响应状态:", error.response.status)
-        console.error("错误响应头:", error.response.headers)
-      } else if (error.request) {
-        console.error("请求已发出但无响应:", error.request)
-      } else {
-        console.error("请求错误:", error.message)
       }
 
       toast({
@@ -369,6 +356,32 @@ export function IssueCardItem({
     window.open(docUrl, "_blank")
   }
 
+  // 显示candidateImages调试信息
+  const renderCandidateImagesDebug = () => {
+    if (!issue.candidateImages || issue.candidateImages.length === 0) {
+      return <div className="text-xs text-red-500">没有candidateImages数据</div>
+    }
+
+    return (
+      <div className="text-xs border p-2 rounded bg-gray-50 overflow-auto max-h-40">
+        <div className="font-bold mb-1">CandidateImages 调试信息:</div>
+        {issue.candidateImages.map((img, index) => (
+          <div key={index} className="mb-1 pb-1 border-b border-dashed">
+            <div>
+              <span className="font-semibold">message_id:</span> {img.message_id}
+            </div>
+            <div>
+              <span className="font-semibold">image_key:</span> {img.image_key}
+            </div>
+            <div className="truncate">
+              <span className="font-semibold">image_data:</span> {img.image_data}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   // 添加一个直接删除指定消息ID的函数
   const deleteSpecificMessageId = async () => {
     if (!issue.eventId) {
@@ -380,8 +393,8 @@ export function IssueCardItem({
       return
     }
 
-    const messageId = "om_x100b4f9bfed66d340f2197bf94e2919" // 使用用户提供的正确消息ID
-
+    // 使用示例中的消息ID
+    const messageId = "om_x100b4f9bfed66d340f2197bf94e2919"
     setIsDeletingImage(true)
 
     try {
@@ -517,6 +530,9 @@ export function IssueCardItem({
               </div>
             )}
           </div>
+
+          {/* 添加candidateImages调试信息 */}
+          {renderCandidateImagesDebug()}
 
           {/* 添加直接删除指定消息ID的按钮 */}
           <div className="flex justify-center mt-2">
@@ -741,7 +757,7 @@ export function IssueCardItem({
         isOpen={deleteImageDialogOpen}
         onClose={() => setDeleteImageDialogOpen(false)}
         onConfirm={confirmDeleteImage}
-        imageUrl={imageToDelete}
+        imageUrl={imageToDelete.url}
         isDeleting={isDeletingImage}
       />
 
