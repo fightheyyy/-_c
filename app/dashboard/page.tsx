@@ -6,8 +6,11 @@ import { FilterBar } from "@/components/filter-bar"
 import { useAuth } from "@/lib/auth-provider"
 import type { IssueCard, IssueStatus } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { MessageSquare, Loader2 } from "lucide-react"
+import { MessageSquare, Loader2, Merge, AlertTriangle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { FeishuChatSimulator } from "@/components/feishu-chat-simulator"
+import { DocumentGenerationButton } from "@/components/document-generation-button"
+import axios from "axios"
 import { GroupedIssueList } from "@/components/grouped-issue-list"
 import {
   AlertDialog,
@@ -19,8 +22,108 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { MergeConfirmationDialog } from "@/components/merge-confirmation-dialog"
 import debounce from "lodash/debounce"
-import { mockIssueCards } from "@/lib/mock-data"
+import { mockIssueCards } from "@/lib/mock-data" // 导入模拟数据
+
+// 定义API返回的事件数据结构
+interface EventImage {
+  image_key: string
+  sender_id: string
+  timestamp: string
+  image_data: string
+  message_id: string
+}
+
+interface EventMessage {
+  type: string
+  content: string
+  sender_id: string
+  timestamp: string
+  message_id: string
+}
+
+interface Event {
+  category: string
+  summary: string
+  id: number
+  is_merged: boolean
+  create_time: string
+  messages: EventMessage[]
+  candidate_images: EventImage[]
+  status: string
+  update_time: string
+}
+
+interface EventsResponse {
+  events: Event[]
+}
+
+// 状态码映射函数
+const mapStatusCodeToStatus = (statusCode: string): IssueStatus => {
+  switch (statusCode) {
+    case "0":
+      return "待处理"
+    case "1":
+      return "整改中"
+    case "2":
+      return "待复核"
+    case "3":
+      return "已闭环"
+    default:
+      return "待处理"
+  }
+}
+
+// API状态检查组件
+const APIStatusChecker = () => {
+  const [apiStatus, setApiStatus] = useState<"loading" | "online" | "offline">("loading")
+
+  useEffect(() => {
+    const checkAPIStatus = async () => {
+      try {
+        const response = await axios.get("/api/health") // 替换为你的健康检查API端点
+        if (response.status === 200) {
+          setApiStatus("online")
+        } else {
+          setApiStatus("offline")
+        }
+      } catch (error) {
+        console.error("API Health Check Failed:", error)
+        setApiStatus("offline")
+      }
+    }
+
+    checkAPIStatus()
+  }, [])
+
+  let statusText = ""
+  let statusColor = "text-gray-500"
+  let icon = null
+
+  switch (apiStatus) {
+    case "loading":
+      statusText = "检查API状态..."
+      icon = <Loader2 className="h-4 w-4 animate-spin mr-2" />
+      break
+    case "online":
+      statusText = "API连接正常"
+      statusColor = "text-green-500"
+      break
+    case "offline":
+      statusText = "API连接异常"
+      statusColor = "text-red-500"
+      icon = <AlertTriangle className="h-4 w-4 mr-2" />
+      break
+  }
+
+  return (
+    <div className={`flex items-center text-sm ${statusColor}`}>
+      {icon}
+      {statusText}
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -35,25 +138,95 @@ export default function DashboardPage() {
     from: undefined,
     to: undefined,
   })
+  const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
   const [showChatSimulator, setShowChatSimulator] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [cardToDelete, setCardToDelete] = useState<{ id: string; eventId: number | null }>({ id: "", eventId: null })
-  const [useMockData] = useState(true) // Always use mock data for now
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
+  const [isMerging, setIsMerging] = useState(false)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+  const [useMockData, setUseMockData] = useState(true) // 添加状态来控制是否使用模拟数据
+  const CACHE_DURATION = 30000 // 30秒缓存
 
-  // Simplified fetch function
+  // 将fetchIssueCards改为useCallback包装的函数
   const fetchIssueCards = useCallback(
-    debounce(() => {
+    debounce(async () => {
       setIsLoading(true)
       try {
-        // Always use mock data for now
-        setIssueCards(mockIssueCards)
-        setFilteredIssues(mockIssueCards)
-        setSelectedIssues([])
-        toast({
-          title: "加载模拟数据成功",
-          description: `成功加载 ${mockIssueCards.length} 个模拟问题卡片`,
-        })
+        if (useMockData) {
+          // 使用模拟数据
+          console.log("使用模拟数据")
+          setIssueCards(mockIssueCards)
+          setFilteredIssues(mockIssueCards)
+          setSelectedIssues([])
+          toast({
+            title: "加载模拟数据成功",
+            description: `成功加载 ${mockIssueCards.length} 个模拟问题卡片`,
+          })
+          setIsLoading(false)
+          return
+        }
+
+        const response = await axios.get<EventsResponse>("/api/events")
+
+        if (response.data && response.data.events) {
+          // 将API返回的事件转换为问题卡片格式
+          const cards: IssueCard[] = response.data.events.map((event) => {
+            // 提取第一条消息作为原始输入
+            const firstMessage = event.messages && event.messages.length > 0 ? event.messages[0].content : ""
+
+            // 提取所有消息ID
+            const messageIds = event.messages ? event.messages.map((m) => m.message_id) : []
+
+            // 提取图片URL
+            const imageUrls =
+              event.candidate_images && event.candidate_images.length > 0
+                ? event.candidate_images.map((img) => img.image_data || `/api/image/${img.image_key}`)
+                : ["/placeholder.svg?key=event-image"]
+
+            // 从消息中提取位置和责任单位
+            let location = ""
+            let responsibleParty = ""
+
+            // 尝试从摘要或消息中提取位置
+            const locationMatch = event.summary.match(/(\d+号楼|\w区|\w座)/)
+            if (locationMatch && locationMatch[1]) {
+              location = locationMatch[1]
+            }
+
+            // 责任单位暂时设为默认值，后续可以根据实际数据调整
+            responsibleParty = "待指定"
+
+            return {
+              id: event.id.toString(), // 直接使用数字ID，不添加前缀
+              eventId: event.id, // 保存原始的eventId
+              originalMessageIds: messageIds, // 保存所有消息ID
+              reporterUserId: event.messages && event.messages.length > 0 ? event.messages[0].sender_id : "unknown",
+              reporterName: "系统聚类",
+              recordTimestamp: event.create_time || new Date().toISOString(),
+              rawTextInput: firstMessage,
+              imageUrls: imageUrls,
+              description: event.summary || "未提供描述",
+              location: location || "未指定位置",
+              responsibleParty: responsibleParty,
+              status: mapStatusCodeToStatus(event.status),
+              lastUpdatedTimestamp: event.update_time || new Date().toISOString(),
+              projectId: "project123",
+              isDeleted: false,
+              isMergedCard: event.is_merged || false,
+            }
+          })
+
+          setIssueCards(cards)
+          setFilteredIssues(cards)
+          setSelectedIssues([])
+
+          toast({
+            title: "获取问题卡片成功",
+            description: `成功获取 ${cards.length} 个问题卡片`,
+          })
+        }
       } catch (error) {
         console.error("获取问题卡片失败:", error)
         toast({
@@ -64,8 +237,8 @@ export default function DashboardPage() {
       } finally {
         setIsLoading(false)
       }
-    }, 500),
-    [toast],
+    }, 500), // 500ms的防抖时间
+    [toast, useMockData], // 依赖项，添加useMockData
   )
 
   useEffect(() => {
@@ -74,18 +247,154 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, router])
 
-  const handleDeleteCard = async (cardId: string) => {
-    // Simplified delete function - just update local state
-    setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
-    setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
-    toast({
-      title: "删除成功",
-      description: `卡片 #${cardId} 已成功删除`,
-    })
-    setDeleteDialogOpen(false)
+  const handleDeleteCard = async (cardId: string, eventId: number | null) => {
+    if (!eventId) {
+      toast({
+        title: "删除失败",
+        description: "无法删除此卡片，未找到对应的事件ID",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // 确保eventId是数字类型
+      const numericEventId = Number(eventId)
+
+      // 添加错误处理和详细日志
+      console.log(`尝试删除卡片，ID: ${cardId}, 事件ID: ${numericEventId}`)
+
+      if (useMockData) {
+        // 如果使用模拟数据，只在前端删除
+        setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
+        setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
+        toast({
+          title: "删除成功",
+          description: `卡片 #${cardId} 已成功删除`,
+        })
+        setIsLoading(false)
+        setDeleteDialogOpen(false)
+        return
+      }
+
+      // 修改为使用GET请求删除卡片，直接使用eventId作为路径参数
+      const response = await axios.get(`/api/events/${numericEventId}`, {
+        // 添加超时设置
+        timeout: 10000,
+        // 添加错误处理选项
+        validateStatus: (status) => {
+          return status >= 200 && status < 300 // 只接受2xx状态码为成功
+        },
+      })
+
+      if (response.status === 200) {
+        // 从状态中移除已删除的卡片
+        setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
+        // 如果卡片在选中列表中，也从中移除
+        setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
+
+        toast({
+          title: "删除成功",
+          description: `卡片 #${cardId} 已成功删除`,
+        })
+      }
+    } catch (error: any) {
+      console.error("删除卡片失败:", error)
+      // 提供更详细的错误信息
+      const errorMessage = error.response?.data?.error || error.message || "未知错误"
+      toast({
+        title: "删除失败",
+        description: `无法删除卡片: ${errorMessage}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+      setDeleteDialogOpen(false)
+    }
   }
 
-  // Component mount effect
+  // 合并卡片功能
+  const handleMergeCards = async () => {
+    if (selectedIssues.length < 2) {
+      toast({
+        title: "无法合并",
+        description: "请至少选择两张卡片进行合并",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // 获取选中卡片的eventId
+    const selectedEventIds = selectedIssues
+      .map((id) => {
+        const card = issueCards.find((card) => card.id === id)
+        return card?.eventId
+      })
+      .filter((id): id is number => id !== undefined)
+
+    if (selectedEventIds.length < 2) {
+      toast({
+        title: "无法合并",
+        description: "选中的卡片中没有足够的有效事件ID",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setMergeDialogOpen(true)
+  }
+
+  const confirmMergeCards = async () => {
+    setIsMerging(true)
+    try {
+      // 获取选中卡片的eventId
+      const selectedEventIds = selectedIssues
+        .map((id) => {
+          const card = issueCards.find((card) => card.id === id)
+          return card?.eventId
+        })
+        .filter((id): id is number => id !== undefined)
+
+      if (useMockData) {
+        // 如果使用模拟数据，只在前端模拟合并
+        toast({
+          title: "合并成功",
+          description: "卡片已成功合并（模拟数据）",
+        })
+        setIsMerging(false)
+        setMergeDialogOpen(false)
+        return
+      }
+
+      // 调用合并API
+      const response = await axios.post("/api/merge-events", {
+        event_ids: selectedEventIds,
+      })
+
+      if (response.data) {
+        toast({
+          title: "合并成功",
+          description: "卡片已成功合并，正在刷新数据...",
+        })
+
+        // 刷新卡片列表
+        await fetchIssueCards()
+      }
+    } catch (error) {
+      console.error("合并卡片失败:", error)
+      toast({
+        title: "合并失败",
+        description: "无法合并选中的卡片，请稍后再试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsMerging(false)
+      setMergeDialogOpen(false)
+    }
+  }
+
+  // 组件挂载时获取问题卡片
   useEffect(() => {
     if (isAuthenticated) {
       fetchIssueCards()
@@ -122,7 +431,8 @@ export default function DashboardPage() {
         (issue) =>
           issue.description.toLowerCase().includes(query) ||
           issue.location.toLowerCase().includes(query) ||
-          issue.responsibleParty.toLowerCase().includes(query),
+          issue.responsibleParty.toLowerCase().includes(query) ||
+          issue.rawTextInput.toLowerCase().includes(query),
       )
     }
 
@@ -130,7 +440,7 @@ export default function DashboardPage() {
   }, [issueCards, statusFilter, dateRange, searchQuery])
 
   const handleIssueUpdate = (updatedIssue: IssueCard) => {
-    // Update local state
+    // 更新本地状态
     const updatedIssues = issueCards.map((issue) => (issue.id === updatedIssue.id ? updatedIssue : issue))
     setIssueCards(updatedIssues)
 
@@ -149,9 +459,37 @@ export default function DashboardPage() {
   }
 
   const handleIssueDelete = (issueId: string, eventId: number | null) => {
-    // Open confirmation dialog
+    // 打开确认对话框
     setCardToDelete({ id: issueId, eventId })
     setDeleteDialogOpen(true)
+  }
+
+  // 检查是否有已合并的卡片被选中
+  const hasMergedCardsSelected = selectedIssues.some((id) => {
+    const card = issueCards.find((card) => card.id === id)
+    return card?.status === "已合并"
+  })
+
+  const handleRefreshClick = () => {
+    const now = Date.now()
+    if (now - lastFetchTime > CACHE_DURATION || issueCards.length === 0) {
+      fetchIssueCards()
+      setLastFetchTime(now)
+    } else {
+      toast({
+        title: "数据已是最新",
+        description: `数据已在${Math.round((now - lastFetchTime) / 1000)}秒前更新过`,
+      })
+    }
+  }
+
+  // 切换数据源
+  const toggleDataSource = () => {
+    setUseMockData(!useMockData)
+    // 切换后重新加载数据
+    setTimeout(() => {
+      fetchIssueCards()
+    }, 100)
   }
 
   if (!isAuthenticated) {
@@ -160,11 +498,15 @@ export default function DashboardPage() {
 
   if (showChatSimulator) {
     return (
-      <div className="p-8 text-center">
-        <h2 className="text-xl font-bold mb-4">飞书聊天模拟器</h2>
-        <p className="mb-4">此功能已暂时禁用以优化部署</p>
-        <Button onClick={() => setShowChatSimulator(false)}>返回问题记录</Button>
-      </div>
+      <FeishuChatSimulator
+        onBackToDashboard={() => {
+          setShowChatSimulator(false)
+          // 返回到问题记录页面时刷新卡片
+          fetchIssueCards()
+        }}
+        onNewIssueCreated={() => {}} // 不再需要这个回调，因为我们会在返回时刷新
+        currentUser={user!}
+      />
     )
   }
 
@@ -172,8 +514,13 @@ export default function DashboardPage() {
     <div className="container mx-auto py-6 px-4 md:px-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
         <h1 className="text-2xl font-bold">问题记录</h1>
+        <APIStatusChecker />
 
         <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+          <Button variant="outline" size="sm" onClick={toggleDataSource} className="flex items-center gap-1">
+            {useMockData ? "使用API数据" : "使用模拟数据"}
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -187,7 +534,7 @@ export default function DashboardPage() {
           <Button
             variant="default"
             size="sm"
-            onClick={fetchIssueCards}
+            onClick={handleRefreshClick}
             disabled={isLoading}
             className="flex items-center gap-1"
           >
@@ -213,8 +560,39 @@ export default function DashboardPage() {
               <Button variant="outline" size="sm" onClick={() => setSelectedIssues([])}>
                 取消选择
               </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleMergeCards}
+                disabled={selectedIssues.length < 2 || hasMergedCardsSelected}
+                className="flex items-center gap-1"
+              >
+                <Merge className="h-4 w-4" />
+                合并卡片
+              </Button>
+              {/* 添加文档生成按钮 */}
+              <DocumentGenerationButton selectedCardIds={selectedIssues} />
             </div>
           )}
+
+          <div className="border rounded-md overflow-hidden flex ml-auto">
+            <Button
+              variant={viewMode === "grouped" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("grouped")}
+              className="rounded-none"
+            >
+              按责任单位分组
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className="rounded-none"
+            >
+              列表视图
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -229,7 +607,7 @@ export default function DashboardPage() {
             onIssueDelete={handleIssueDelete}
             selectedIssues={selectedIssues}
             onIssueSelect={handleIssueSelect}
-            documents={[]}
+            documents={[]} // 不再需要文档
           />
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -239,7 +617,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
+      {/* 删除确认对话框 */}
       {deleteDialogOpen && (
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
@@ -252,7 +630,7 @@ export default function DashboardPage() {
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => handleDeleteCard(cardToDelete.id)}
+                onClick={() => handleDeleteCard(cardToDelete.id, cardToDelete.eventId)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 删除
@@ -261,6 +639,15 @@ export default function DashboardPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {/* 合并确认对话框 */}
+      <MergeConfirmationDialog
+        isOpen={mergeDialogOpen}
+        onClose={() => setMergeDialogOpen(false)}
+        onConfirm={confirmMergeCards}
+        selectedCount={selectedIssues.length}
+        isMerging={isMerging}
+      />
     </div>
   )
 }

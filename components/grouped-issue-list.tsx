@@ -3,6 +3,8 @@
 import { useState } from "react"
 import type { IssueCard, GeneratedDocument } from "@/lib/types"
 import { IssueCardItem } from "@/components/issue-card-item"
+import { EditIssueDialog } from "@/components/edit-issue-dialog"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,7 +28,41 @@ export function GroupedIssueList({
   onIssueSelect,
   documents,
 }: GroupedIssueListProps) {
+  const [editingIssue, setEditingIssue] = useState<IssueCard | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [issueToDelete, setIssueToDelete] = useState<IssueCard | null>(null)
+
+  const handleEditClick = (issue: IssueCard) => {
+    setEditingIssue(issue)
+  }
+
+  const handleEditClose = () => {
+    setEditingIssue(null)
+  }
+
+  const handleEditSave = (updatedIssue: IssueCard) => {
+    onIssueUpdate(updatedIssue)
+    setEditingIssue(null)
+  }
+
+  const handleDeleteClick = (issue: IssueCard) => {
+    setIssueToDelete(issue)
+    setDeleteConfirmOpen(true)
+  }
+
+  const handleDeleteConfirm = () => {
+    if (issueToDelete) {
+      onIssueDelete(issueToDelete.id, issueToDelete.eventId || null)
+      setDeleteConfirmOpen(false)
+      setIssueToDelete(null)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false)
+    setIssueToDelete(null)
+  }
 
   const toggleGroup = (responsibleParty: string) => {
     const newExpandedGroups = new Set(expandedGroups)
@@ -117,21 +153,24 @@ export function GroupedIssueList({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {groupedIssues[responsibleParty]
                   .sort((a, b) => {
-                    // Sort by status and time
+                    // 首先按状态排序：未闭环的排在前面
                     const aResolved = a.status === "已闭环" || a.status === "已合并"
                     const bResolved = b.status === "已闭环" || b.status === "已合并"
                     if (aResolved !== bResolved) return aResolved ? 1 : -1
+
+                    // 然后按时间倒序排列
                     return new Date(b.recordTimestamp).getTime() - new Date(a.recordTimestamp).getTime()
                   })
                   .map((issue) => (
                     <IssueCardItem
                       key={issue.id}
                       issue={issue}
-                      onEditClick={(issue) => onIssueUpdate(issue)}
-                      onDeleteClick={(issue) => onIssueDelete(issue.id, issue.eventId || null)}
+                      onEditClick={handleEditClick}
+                      onDeleteClick={handleDeleteClick}
                       isSelected={selectedIssues.includes(issue.id)}
                       onSelect={(selected) => onIssueSelect(issue.id, selected)}
                       relatedDocuments={documents.filter((doc) => doc.sourceCardIds.includes(issue.id))}
+                      onIssueUpdate={onIssueUpdate} // 添加这一行，传递更新函数
                     />
                   ))}
               </div>
@@ -139,6 +178,16 @@ export function GroupedIssueList({
           )}
         </Card>
       ))}
+
+      {editingIssue && <EditIssueDialog issue={editingIssue} onClose={handleEditClose} onSave={handleEditSave} />}
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="确认删除问题记录"
+        description={`您确定要删除问题记录 #${issueToDelete?.id || ""} 吗？此操作无法撤销。`}
+      />
     </div>
   )
 }
