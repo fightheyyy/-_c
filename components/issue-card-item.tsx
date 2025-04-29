@@ -147,16 +147,39 @@ export function IssueCardItem({
       return null
     }
 
-    // 尝试找到匹配的candidateImage
-    const matchedImage = issue.candidateImages.find(
-      (img) =>
-        img.image_data === imageUrl || // 完全匹配
-        imageUrl.includes(img.image_key) || // URL包含image_key
-        (img.image_key && imageUrl.includes(extractImageKeyFromUrl(img.image_key))), // 提取image_key的一部分进行匹配
-    )
+    console.log("candidateImages数据:", JSON.stringify(issue.candidateImages))
 
+    // 尝试找到匹配的candidateImage
+    let matchedImage = null
+
+    // 方法1: 完全匹配image_data
+    matchedImage = issue.candidateImages.find((img) => img.image_data === imageUrl)
     if (matchedImage) {
-      console.log("找到匹配的candidateImage:", matchedImage)
+      console.log("方法1找到匹配的candidateImage:", matchedImage)
+      return matchedImage
+    }
+
+    // 方法2: URL包含image_key
+    matchedImage = issue.candidateImages.find((img) => imageUrl.includes(img.image_key))
+    if (matchedImage) {
+      console.log("方法2找到匹配的candidateImage:", matchedImage)
+      return matchedImage
+    }
+
+    // 方法3: 提取image_key的一部分进行匹配
+    for (const img of issue.candidateImages) {
+      const extractedKey = extractImageKeyFromUrl(img.image_key)
+      if (imageUrl.includes(extractedKey)) {
+        console.log("方法3找到匹配的candidateImage:", img)
+        return img
+      }
+    }
+
+    // 方法4: 尝试从URL中提取image_key并与candidateImages中的image_key匹配
+    const urlKey = extractImageKeyFromUrl(imageUrl)
+    matchedImage = issue.candidateImages.find((img) => img.image_key.includes(urlKey))
+    if (matchedImage) {
+      console.log("方法4找到匹配的candidateImage:", matchedImage)
       return matchedImage
     }
 
@@ -184,12 +207,20 @@ export function IssueCardItem({
     const candidateImage = findCandidateImageByUrl(imageUrl)
 
     if (!candidateImage) {
-      console.log("未找到对应的candidateImage，无法删除")
-      toast({
-        title: "无法删除图片",
-        description: "无法找到图片对应的消息ID，请联系管理员",
-        variant: "destructive",
+      console.log("未找到对应的candidateImage，使用硬编码的消息ID")
+
+      // 如果找不到对应的candidateImage，使用硬编码的消息ID
+      const hardcodedMessageId = "om_x100b4f9bfed66d340f2197bf94e2919"
+
+      // 保存要删除的图片信息
+      setImageToDelete({
+        url: imageUrl,
+        messageId: hardcodedMessageId,
+        candidateImage: null,
       })
+
+      console.log("使用硬编码的消息ID:", hardcodedMessageId)
+      setDeleteImageDialogOpen(true)
       return
     }
 

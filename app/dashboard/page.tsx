@@ -179,10 +179,13 @@ export default function DashboardPage() {
             // 提取所有消息ID
             const messageIds = event.messages ? event.messages.map((m) => m.message_id) : []
 
+            // 保存完整的candidateImages数组
+            const candidateImages = event.candidate_images || []
+
             // 提取图片URL
             const imageUrls =
-              event.candidate_images && event.candidate_images.length > 0
-                ? event.candidate_images.map((img) => img.image_data || `/api/image/${img.image_key}`)
+              candidateImages.length > 0
+                ? candidateImages.map((img) => img.image_data || `/api/image/${img.image_key}`)
                 : ["/placeholder.svg?key=event-image"]
 
             // 从消息中提取位置和责任单位
@@ -207,6 +210,7 @@ export default function DashboardPage() {
               recordTimestamp: event.create_time || new Date().toISOString(),
               rawTextInput: firstMessage,
               imageUrls: imageUrls,
+              candidateImages: candidateImages, // 保存完整的candidateImages数组
               description: event.summary || "未提供描述",
               location: location || "未指定位置",
               responsibleParty: responsibleParty,
