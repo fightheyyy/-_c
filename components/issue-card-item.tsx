@@ -369,49 +369,6 @@ export function IssueCardItem({
     window.open(docUrl, "_blank")
   }
 
-  // 添加一个直接删除指定消息ID的函数
-  const deleteSpecificMessageId = async () => {
-    if (!issue.eventId) {
-      toast({
-        title: "删除失败",
-        description: "无法删除此图片，未找到对应的事件ID",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const messageId = "om_x100b4f9bfed66d340f2197bf94e2919" // 使用用户提供的正确消息ID
-
-    setIsDeletingImage(true)
-
-    try {
-      console.log("尝试删除指定消息ID:", messageId)
-
-      const response = await axios.post("/api/proxy/delete-image", {
-        eventId: issue.eventId,
-        messageId: messageId,
-      })
-
-      console.log("删除指定消息ID响应:", response)
-
-      if (response.status === 200) {
-        toast({
-          title: "删除成功",
-          description: `成功删除消息ID为 ${messageId} 的图片`,
-        })
-      }
-    } catch (error: any) {
-      console.error("删除指定消息ID失败:", error)
-      toast({
-        title: "删除失败",
-        description: error.response?.data?.error || "无法删除图片，请稍后再试",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeletingImage(false)
-    }
-  }
-
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "ring-2 ring-primary" : ""}`}>
       <CardHeader className="p-4 pb-0 flex flex-row items-start justify-between space-y-0">
@@ -516,26 +473,6 @@ export function IssueCardItem({
                 <p className="text-xs text-muted-foreground">暂无图片</p>
               </div>
             )}
-          </div>
-
-          {/* 添加直接删除指定消息ID的按钮 */}
-          <div className="flex justify-center mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={deleteSpecificMessageId}
-              disabled={isDeletingImage}
-              className="text-xs"
-            >
-              {isDeletingImage ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  删除中...
-                </>
-              ) : (
-                "删除指定消息ID (om_x100b4f9bfed66d340f2197bf94e2919)"
-              )}
-            </Button>
           </div>
 
           {/* 添加自动生成文档按钮 */}
