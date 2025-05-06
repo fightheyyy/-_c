@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { MergeConfirmationDialog } from "@/components/merge-confirmation-dialog"
 import debounce from "lodash/debounce"
-import { mockIssueCards } from "@/lib/mock-data" // 导入模拟数据
 
 // 定义API返回的事件数据结构
 interface EventImage {
@@ -107,7 +106,7 @@ const APIStatusChecker = () => {
       icon = <Loader2 className="h-4 w-4 animate-spin mr-2" />
       break
     case "online":
-      statusText = "API连接正常"
+      statusText = ""
       statusColor = "text-green-500"
       break
     case "offline":
@@ -146,7 +145,6 @@ export default function DashboardPage() {
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
   const [lastFetchTime, setLastFetchTime] = useState<number>(0)
-  const [useMockData, setUseMockData] = useState(true) // 添加状态来控制是否使用模拟数据
   const CACHE_DURATION = 30000 // 30秒缓存
 
   // 将fetchIssueCards改为useCallback包装的函数
@@ -154,20 +152,6 @@ export default function DashboardPage() {
     debounce(async () => {
       setIsLoading(true)
       try {
-        if (useMockData) {
-          // 使用模拟数据
-          console.log("使用模拟数据")
-          setIssueCards(mockIssueCards)
-          setFilteredIssues(mockIssueCards)
-          setSelectedIssues([])
-          toast({
-            title: "加载模拟数据成功",
-            description: `成功加载 ${mockIssueCards.length} 个模拟问题卡片`,
-          })
-          setIsLoading(false)
-          return
-        }
-
         const response = await axios.get<EventsResponse>("/api/events")
 
         if (response.data && response.data.events) {
@@ -238,7 +222,7 @@ export default function DashboardPage() {
         setIsLoading(false)
       }
     }, 500), // 500ms的防抖时间
-    [toast, useMockData], // 依赖项，添加useMockData
+    [toast],
   )
 
   useEffect(() => {
@@ -261,22 +245,6 @@ export default function DashboardPage() {
     try {
       // 确保eventId是数字类型
       const numericEventId = Number(eventId)
-
-      // 添加错误处理和详细日志
-      console.log(`尝试删除卡片，ID: ${cardId}, 事件ID: ${numericEventId}`)
-
-      if (useMockData) {
-        // 如果使用模拟数据，只在前端删除
-        setIssueCards((prev) => prev.filter((card) => card.id !== cardId))
-        setSelectedIssues((prev) => prev.filter((id) => id !== cardId))
-        toast({
-          title: "删除成功",
-          description: `卡片 #${cardId} 已成功删除`,
-        })
-        setIsLoading(false)
-        setDeleteDialogOpen(false)
-        return
-      }
 
       // 修改为使用GET请求删除卡片，直接使用eventId作为路径参数
       const response = await axios.get(`/api/events/${numericEventId}`, {
@@ -355,17 +323,6 @@ export default function DashboardPage() {
           return card?.eventId
         })
         .filter((id): id is number => id !== undefined)
-
-      if (useMockData) {
-        // 如果使用模拟数据，只在前端模拟合并
-        toast({
-          title: "合并成功",
-          description: "卡片已成功合并（模拟数据）",
-        })
-        setIsMerging(false)
-        setMergeDialogOpen(false)
-        return
-      }
 
       // 调用合并API
       const response = await axios.post("http://43.139.19.144:8000/merge-events", {
@@ -483,15 +440,6 @@ export default function DashboardPage() {
     }
   }
 
-  // 切换数据源
-  const toggleDataSource = () => {
-    setUseMockData(!useMockData)
-    // 切换后重新加载数据
-    setTimeout(() => {
-      fetchIssueCards()
-    }, 100)
-  }
-
   if (!isAuthenticated) {
     return null
   }
@@ -517,10 +465,6 @@ export default function DashboardPage() {
         <APIStatusChecker />
 
         <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
-          <Button variant="outline" size="sm" onClick={toggleDataSource} className="flex items-center gap-1">
-            {useMockData ? "使用API数据" : "使用模拟数据"}
-          </Button>
-
           <Button
             variant="outline"
             size="sm"

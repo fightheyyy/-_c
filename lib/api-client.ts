@@ -1,5 +1,5 @@
 import axios from "axios"
-import { mockIssueCards } from "./mock-data"
+// import { mockIssueCards } from "./mock-data"
 import type { IssueCard } from "./types"
 
 // API基础URL
@@ -144,8 +144,8 @@ export async function getIssueCards(): Promise<IssueCard[]> {
 
     throw new Error("API响应格式不正确")
   } catch (error) {
-    console.error("获取问题卡片失败，使用模拟数据:", error)
-    return mockIssueCards
+    // console.error("获取问题卡片失败，使用模拟数据:", error)
+    // return mockIssueCards
   }
 }
 

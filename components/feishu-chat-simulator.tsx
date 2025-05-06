@@ -338,7 +338,7 @@ export function FeishuChatSimulator({ onBackToDashboard, onNewIssueCreated, curr
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="font-semibold">东方明珠二期工程 - 监理团队</h2>
+            <h2 className="font-semibold">监理团队</h2>
             <p className="text-sm text-muted-foreground">25人 · 飞书群聊</p>
           </div>
         </div>
