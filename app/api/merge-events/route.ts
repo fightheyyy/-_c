@@ -11,9 +11,7 @@ export async function POST(request: Request) {
     }
 
     // 调用外部API进行合并
-    const response = await axios.post("http://43.139.19.144:8000/merge-events", {
-      event_ids,
-    })
+    const response = await axios.post("http://43.139.19.144:8000/merge-events", event_ids)
 
     return NextResponse.json(response.data)
   } catch (error) {

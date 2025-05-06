@@ -368,7 +368,7 @@ export default function DashboardPage() {
       }
 
       // 调用合并API
-      const response = await axios.post("/api/merge-events", {
+      const response = await axios.post("http://43.139.19.144:8000/merge-events", {
         event_ids: selectedEventIds,
       })
 

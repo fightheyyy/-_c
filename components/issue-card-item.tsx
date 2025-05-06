@@ -48,11 +48,6 @@ interface IssueCardItemProps {
 // 定义一个映射表，用于存储图片URL到消息ID的映射
 const imageUrlToMessageIdMap = new Map<string, string>()
 
-// 硬编码一些已知的消息ID，用于测试
-imageUrlToMessageIdMap.set(
-  "http://43.139.19.144:8000/get_image/img_v3_02lm_281c3666-cdf4-4ba7-b984-93880879ec5g",
-  "om_x100b4f9bfed66d340f2197bf94e2919",
-)
 
 export function IssueCardItem({
   issue,
