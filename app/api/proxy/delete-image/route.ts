@@ -3,16 +3,17 @@ import axios from "axios"
 
 export async function POST(request: Request) {
   try {
-    const { eventId, messageId } = await request.json()
+    const { eventId, imageUrl } = await request.json()
 
-    if (!eventId || !messageId) {
-      return NextResponse.json({ error: "事件ID和消息ID都是必需的" }, { status: 400 })
+    if (!eventId || !imageUrl) {
+      return NextResponse.json({ error: "事件ID和图片URL都是必需的" }, { status: 400 })
     }
 
-    console.log(`代理删除图片请求: 事件ID=${eventId}, 消息ID=${messageId}`)
+    console.log(`代理删除图片请求: 事件ID=${eventId}, 图片URL=${imageUrl}`)
 
-    // 记录完整的请求URL以便调试
-    const requestUrl = `http://43.139.19.144:8000/events-db/${eventId}/images/${messageId}`
+    // 构造API URL
+    const apiBaseUrl = "http://43.139.19.144:8000/events-db"
+    const requestUrl = `${apiBaseUrl}/${eventId}/imagesByUrl?image_url=${imageUrl}`
     console.log(`发送删除请求到API: ${requestUrl}`)
 
     const response = await axios.delete(requestUrl, {

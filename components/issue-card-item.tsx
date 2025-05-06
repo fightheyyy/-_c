@@ -45,10 +45,6 @@ interface IssueCardItemProps {
   onIssueUpdate?: (updatedIssue: IssueCard) => void
 }
 
-// 定义一个映射表，用于存储图片URL到消息ID的映射
-const imageUrlToMessageIdMap = new Map<string, string>()
-
-
 export function IssueCardItem({
   issue,
   onEditClick,
@@ -62,7 +58,6 @@ export function IssueCardItem({
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [deleteImageDialogOpen, setDeleteImageDialogOpen] = useState(false)
   const [imageToDelete, setImageToDelete] = useState<string>("")
-  const [messageIdToDelete, setMessageIdToDelete] = useState<string>("")
   const [isDeletingImage, setIsDeletingImage] = useState(false)
   const [associateImageDialogOpen, setAssociateImageDialogOpen] = useState(false)
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
@@ -134,76 +129,14 @@ export function IssueCardItem({
     setSelectedImage(null)
   }
 
-  // 查找图片对应的消息ID
-  const findMessageIdForImage = (imageUrl: string): string | null => {
-    console.log("查找图片对应的消息ID，URL:", imageUrl)
-
-    // 1. 首先检查映射表中是否有这个URL的记录
-    if (imageUrlToMessageIdMap.has(imageUrl)) {
-      const messageId = imageUrlToMessageIdMap.get(imageUrl)
-      console.log("从映射表中找到消息ID:", messageId)
-      return messageId || null
-    }
-
-    // 2. 检查issue.candidateImages中是否有匹配的记录
-    if (issue.candidateImages && issue.candidateImages.length > 0) {
-      const matchedImage = issue.candidateImages.find(
-        (img) => img.image_data === imageUrl || imageUrl.includes(img.image_key),
-      )
-
-      if (matchedImage) {
-        console.log("从candidateImages中找到匹配的图片，消息ID:", matchedImage.message_id)
-        // 将找到的消息ID添加到映射表中
-        imageUrlToMessageIdMap.set(imageUrl, matchedImage.message_id)
-        return matchedImage.message_id
-      }
-    }
-
-    // 3. 如果是特定的已知URL，返回硬编码的消息ID
-    if (imageUrl.includes("img_v3_02lm_281c3666-cdf4-4ba7-b984-93880879ec5g")) {
-      const hardcodedMessageId = "om_x100b4f9bfed66d340f2197bf94e2919"
-      console.log("使用硬编码的消息ID:", hardcodedMessageId)
-      // 将硬编码的消息ID添加到映射表中
-      imageUrlToMessageIdMap.set(imageUrl, hardcodedMessageId)
-      return hardcodedMessageId
-    }
-
-    // 4. 尝试从URL中提取om_开头的消息ID
-    const omIdMatch = imageUrl.match(/om_[a-zA-Z0-9_-]+/)
-    if (omIdMatch) {
-      console.log("从URL中提取到om_格式的消息ID:", omIdMatch[0])
-      // 将提取的消息ID添加到映射表中
-      imageUrlToMessageIdMap.set(imageUrl, omIdMatch[0])
-      return omIdMatch[0]
-    }
-
-    console.log("无法找到图片对应的消息ID")
-    return null
-  }
-
   const handleDeleteImageClick = (imageUrl: string) => {
     console.log("点击删除图片按钮，图片URL:", imageUrl)
-
-    // 查找图片对应的消息ID
-    const messageId = findMessageIdForImage(imageUrl)
-
-    if (!messageId) {
-      toast({
-        title: "无法删除图片",
-        description: "无法找到图片对应的消息ID，请联系管理员",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // 保存图片URL和消息ID
     setImageToDelete(imageUrl)
-    setMessageIdToDelete(messageId)
     setDeleteImageDialogOpen(true)
   }
 
   const confirmDeleteImage = async () => {
-    console.log("确认删除图片，事件ID:", issue.eventId, "消息ID:", messageIdToDelete)
+    console.log("确认删除图片，图片URL:", imageToDelete)
 
     if (!issue.eventId) {
       toast({
@@ -215,10 +148,10 @@ export function IssueCardItem({
       return
     }
 
-    if (!messageIdToDelete) {
+    if (!imageToDelete) {
       toast({
         title: "删除失败",
-        description: "无法删除此图片，未找到对应的消息ID",
+        description: "无法删除此图片，未找到对应的图片URL",
         variant: "destructive",
       })
       setDeleteImageDialogOpen(false)
@@ -227,34 +160,22 @@ export function IssueCardItem({
 
     setIsDeletingImage(true)
 
-    // 确保事件ID是数字
-    const numericEventId = Number.parseInt(issue.eventId.toString(), 10)
-    if (isNaN(numericEventId)) {
-      toast({
-        title: "删除失败",
-        description: "事件ID必须是数字",
-        variant: "destructive",
-      })
-      setIsDeletingImage(false)
-      setDeleteImageDialogOpen(false)
-      return
-    }
-
-    console.log("准备发送删除请求，事件ID:", numericEventId, "消息ID:", messageIdToDelete)
-
     try {
       // 使用代理API路由来避免跨域问题
       const response = await axios.post("/api/proxy/delete-image", {
-        eventId: numericEventId,
-        messageId: messageIdToDelete,
+        eventId: issue.eventId,
+        imageUrl: imageToDelete,
       })
 
       console.log("删除图片响应:", response)
 
       if (response.status === 200) {
         console.log("删除图片成功")
+
         // 从卡片中移除已删除的图片
-        const updatedImageUrls = issue.imageUrls.filter((url) => url !== imageToDelete)
+        const updatedImageUrls = issue.imageUrls.filter(
+          (url) => url !== imageToDelete
+        )
 
         const updatedIssue: IssueCard = {
           ...issue,
@@ -270,6 +191,8 @@ export function IssueCardItem({
           title: "删除成功",
           description: "图片已成功删除",
         })
+      } else {
+        throw new Error("删除图片失败，服务器返回非200状态码")
       }
     } catch (error: any) {
       console.error("删除图片失败:", error)
@@ -293,6 +216,7 @@ export function IssueCardItem({
     } finally {
       setIsDeletingImage(false)
       setDeleteImageDialogOpen(false)
+      setImageToDelete("")
     }
   }
 
@@ -444,8 +368,13 @@ export function IssueCardItem({
                           e.stopPropagation()
                           handleDeleteImageClick(imageUrl)
                         }}
+                        disabled={isDeletingImage}
                       >
-                        <X className="h-3 w-3" />
+                        {isDeletingImage ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
                       </Button>
                     )}
                   </div>
@@ -486,16 +415,11 @@ export function IssueCardItem({
                         disabled={isGeneratingDoc || issue.status === "已合并"}
                       >
                         {isGeneratingDoc ? (
-                          <>
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            生成中...
-                          </>
+                          <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          <>
-                            <FileText className="h-3 w-3" />
-                            自动生成文档
-                          </>
+                          <FileText className="h-3 w-3" />
                         )}
+                        自动生成文档
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -661,9 +585,16 @@ export function IssueCardItem({
                     closeImageDialog()
                     handleDeleteImageClick(selectedImage)
                   }}
+                  disabled={isDeletingImage}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  删除图片
+                  {isDeletingImage ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      删除图片
+                    </>
+                  )}
                 </Button>
               )}
             </div>
