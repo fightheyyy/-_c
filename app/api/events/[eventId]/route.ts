@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: { params: { eventId: str
     console.log(`尝试通过GET请求删除事件，ID: ${eventId}`)
 
     // 修改API路径，直接使用events-db/{eventId}，不带/delete
-    const response = await axios.delete(`http://43.139.19.144:8000/events-db/${eventId}`, {
+    const response = await axios.get(`http://43.139.19.144:8000/events-db/${eventId}`, {
       timeout: 10000, // 添加超时设置
     })
 
